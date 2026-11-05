@@ -23,6 +23,7 @@ class CentralTests(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
         self.app = create_app(testing=True)
+        self.app.config["SERVER_NAME"] = "127.0.0.1:8765"
         self.sent = []
         self.app.config["SEND_MAIL"] = lambda *args: self.sent.append(args)
         self.client = self.app.test_client()
