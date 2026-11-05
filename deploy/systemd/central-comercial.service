@@ -1,0 +1,31 @@
+[Unit]
+Description=Central Comercial Tec Escola
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=central-comercial
+Group=central-comercial
+WorkingDirectory=/opt/central-comercial
+EnvironmentFile=/etc/central-comercial/central-comercial.env
+ExecStart=/opt/central-comercial/.venv/bin/gunicorn --workers 1 --threads 4 --timeout 35 --bind 127.0.0.1:8765 --access-logfile - --error-logfile - central_comercial:create_app()
+Restart=on-failure
+RestartSec=5
+UMask=0077
+LimitNOFILE=4096
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

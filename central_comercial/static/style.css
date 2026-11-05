@@ -61,3 +61,20 @@ footer{color:#95a3b4;font-size:11px;padding:30px 0 0;text-align:center}
 .login-card small{display:block;color:#8d9bae;font-size:11px;line-height:1.5;margin-top:21px}
 @media(max-width:880px){.workspace{grid-template-columns:1fr}.heading{align-items:flex-start}.panel{padding:23px}#email-frame{height:570px}}
 @media(max-width:510px){.shell{padding:24px 14px}.top-inner{padding:0 16px}.top-title{font-size:12px}.heading{display:block}.status{display:inline-flex;margin-top:16px}.two-fields{grid-template-columns:1fr;gap:0}h1{font-size:25px}#email-frame{height:480px}}
+textarea{display:block;width:100%;min-height:92px;resize:vertical;border:1px solid #dce4ed;border-radius:8px;padding:10px 12px;font:inherit;font-size:13px;line-height:1.5;color:#213953;background:#fff}
+textarea:focus{outline:none;border-color:#3486df;box-shadow:0 0 0 3px rgba(52,134,223,.12)}
+.optional{font-weight:400;color:#8291a5}
+.field-help{font-size:11px;color:#8291a5;line-height:1.45;margin:7px 0 0}
+.history-panel{margin-top:22px;padding:23px 28px;background:#fff;border:1px solid #e4eaf3;border-radius:13px;box-shadow:0 5px 23px rgba(37,73,116,.035)}
+.history-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid #edf1f5}
+.history-heading h2{font-size:17px;margin:6px 0 0}
+.history-list{list-style:none;margin:0;padding:0}
+.history-list li{display:grid;grid-template-columns:minmax(180px,1fr) 190px minmax(150px,.7fr);gap:16px;align-items:center;padding:13px 0;border-bottom:1px solid #f0f3f7;font-size:12px}
+.history-list li:last-child{border-bottom:0}
+.history-template{font-weight:650;color:#334b67}
+.history-list time{color:#7c8da2;font-variant-numeric:tabular-nums}
+.history-status{font-weight:650}
+.history-status.ok{color:#176d51}
+.history-status.failed{color:#a24b3c}
+.history-empty{font-size:12px;color:#8291a5;margin:17px 0 2px}
+@media(max-width:700px){.history-panel{padding:19px}.history-heading{display:block}.history-heading .muted{margin-top:7px}.history-list li{grid-template-columns:1fr;gap:5px;padding:14px 0}.history-list time{font-size:11px}}
