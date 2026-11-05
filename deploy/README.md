@@ -1,5 +1,7 @@
 # Runbook de implantação isolada
 
+Para operação local no Windows com Waitress e Cloudflare Tunnel/Access, veja [`windows/README.md`](windows/README.md). O modelo `cloudflared` também fica no repositório; nenhum recurso Cloudflare foi provisionado.
+
 Estes passos destinam-se a uma VM Linux nova, dedicada e autorizada para a Central Comercial. Não os execute em `samdev-control-01`, na VPS de produção da TecEscola, nem em qualquer host que compartilhe serviços sem comprovação de isolamento, capacidade e autorização. Provisionamento de VM, cobrança, DNS, firewall/VPN e certificados dependem de autorização do proprietário.
 
 ## Pré-requisitos do host

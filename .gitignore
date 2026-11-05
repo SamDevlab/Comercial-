@@ -9,3 +9,6 @@ venv/
 *.key
 .DS_Store
 .pytest_cache/
+deploy/cloudflared/config.yml
+deploy/cloudflared/*.json
+.cloudflared/

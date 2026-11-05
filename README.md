@@ -14,18 +14,17 @@ O modelo HTML original é enviado como `text/html` dentro de uma mensagem MIME m
 
 ## Instalação local
 
-Requer Python 3.12 ou superior. O exemplo abaixo usa PowerShell no Windows e não depende de Docker:
+Requer Python 3.12 ou superior. Para operação local no Windows, use Waitress e os arquivos de segredo protegidos pelo ACL do usuário; o passo a passo está em [`deploy/windows/README.md`](deploy/windows/README.md). Não é necessário Docker:
 
 ```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-$env:CENTRAL_ADMIN_PASSWORD_HASH = python -m central_comercial hash-password
-$env:CENTRAL_SESSION_SECRET = python -m central_comercial generate-secret
-python -m central_comercial
+uv pip install --python .venv\Scripts\python.exe -r deploy\requirements-windows.txt
+Set-ExecutionPolicy -Scope Process Bypass
+.\deploy\windows\initialize-local.ps1
+.\deploy\windows\run-local.ps1
 ```
 
-Os comandos de senha pedem a senha sem exibi-la. Configure o SMTP só em ambiente privado, nunca em `.env.example`, Git ou logs. Para uso local, abra <http://127.0.0.1:8765/login>. Sem variáveis Lark, prévias funcionam e envio fica indisponível.
+O comando usa `uv`; se ele não estiver instalado, veja a alternativa com pip no runbook. O runner escuta apenas em `127.0.0.1:8765`; abra <http://127.0.0.1:8765/login>. O inicializador cria hash scrypt, segredo de sessão e senha administrativa aleatórios em `%LOCALAPPDATA%\CentralComercial`, com ACL restrita. Não imprime a senha nem instala início automático. Sem variáveis Lark, prévias funcionam e envio fica indisponível. Para desenvolvimento, `python -m central_comercial` continua disponível, mas não use o servidor Flask de desenvolvimento como serviço remoto.
 
 ## Variáveis de ambiente
 
@@ -65,11 +64,15 @@ Em proxy reverso, preserve `Host`, encaminhe `X-Forwarded-For` de um proxy confi
 
 Os arquivos-base de systemd, Nginx e ambiente estão em [`deploy/`](deploy/). Eles são modelos, não foram aplicados a nenhuma VPS. O serviço usa usuário dedicado, Gunicorn com um worker e escuta em loopback; o Nginx exige certificado TLS já provisionado. Ajuste domínio, caminho, limite de upload e políticas de acesso antes de instalar. O workflow valida a instalação do manifesto Linux e inicia o Gunicorn em um runner GitHub efêmero para consultar `/healthz`; isso não é um deploy nem valida o certificado ou proxy de uma hospedagem real.
 
-Situação desta campanha: `DEPLOY=BLOCKED`. Não há ambiente de homologação isolado, domínio autorizado ou acesso demonstrável à VPS nesta sessão. Nenhuma produção, DNS, Cloudflare ou serviço foi alterado. Não exponha o painel antes de configurar HTTPS, acesso privado (por exemplo VPN ou controle de acesso já autorizado), hash de senha, segredo e credenciais SMTP.
+Situação desta campanha: `WINDOWS_LOCAL=AVAILABLE`; `PUBLIC_TUNNEL=BLOCKED_PENDING_CLOUDFLARE_AUTHORIZATION`. O runtime local está disponível em loopback. Não há zona ou identidade Cloudflare autorizada demonstrável nesta sessão, nem ambiente de homologação/VPS. Nenhuma produção, DNS, Cloudflare ou serviço foi alterado. Não exponha o painel antes de configurar HTTPS, Access, hash de senha, segredo e credenciais SMTP.
+
+## Windows local e Cloudflare Tunnel
+
+O runtime Windows usa Waitress em loopback e não cria serviço. O modelo de Tunnel e a proposta de Access estão em [`deploy/windows/README.md`](deploy/windows/README.md) e [`deploy/cloudflared/config.example.yml`](deploy/cloudflared/config.example.yml). Cloudflare não está configurado: não há sessão, certificado ou zona verificada. O hostname, túnel, política Access e registro DNS precisam de autorização explícita do proprietário; não há mudanças de DNS ou Workers.
 
 ## ChatGPT Work
 
-O painel tem labels, controles nativos, estados acessíveis, confirmação no navegador e seletores `data-testid` estáveis. Isso prepara uma automação por navegador após a implantação privada. Não existe conector nativo Lark/ChatGPT nem atalho público de envio. O teste específico com sessão real do ChatGPT Work depende de uma instância HTTPS autorizada e sessão autenticada; permanece pendente.
+O painel tem labels, controles nativos, estados acessíveis, confirmação no navegador e seletores `data-testid` estáveis. Não existe conector nativo Lark/ChatGPT nem atalho público de envio. O Cloud Browser do ChatGPT Work executa remotamente e não acessa arquivos locais do Windows; o navegador integrado não automatiza a seleção/upload de arquivo local. Para PDF local, use “Work locally” no app de desktop quando disponível, ou um navegador local compatível com a extensão e selecione o arquivo aprovado manualmente. Consulte [Browser](https://learn.chatgpt.com/docs/browser), [Escolher trabalho local ou na nuvem](https://learn.chatgpt.com/docs/use-chatgpt) e [Extensão do navegador](https://learn.chatgpt.com/docs/chrome-extension). A compatibilidade real com Cloudflare Access e o fluxo do Work não foram testados; veja [`deploy/windows/README.md`](deploy/windows/README.md).
 
 ## Testes
 

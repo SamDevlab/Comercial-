@@ -1,0 +1,12 @@
+# EXAMPLE ONLY. The reserved example.com hostname and zero UUID are not usable.
+# Keep real Tunnel credentials outside the repository in the current user's protected profile.
+tunnel: 00000000-0000-4000-8000-000000000000
+credentials-file: "C:/Users/REPLACE-ME/.cloudflared/00000000-0000-4000-8000-000000000000.json"
+
+ingress:
+  - hostname: central.example.com
+    service: http://127.0.0.1:8765
+    originRequest:
+      httpHostHeader: central.example.com
+      disableChunkedEncoding: true
+  - service: http_status:404

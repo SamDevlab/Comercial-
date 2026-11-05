@@ -126,6 +126,48 @@ class CentralTests(unittest.TestCase):
         self.assertIn("frame-ancestors 'none'", page.headers["Content-Security-Policy"])
         self.assertIn("max-age=31536000", page.headers["Strict-Transport-Security"])
 
+    def test_cloudflare_tunnel_https_host_origin_cookie_and_client_ip(self):
+        secure_origin = "https://central.example.com"
+        with patch.dict(os.environ, {
+            "CENTRAL_PUBLIC_ORIGIN": secure_origin,
+            "CENTRAL_TRUSTED_PROXY_HOPS": "1",
+        }):
+            app = create_app(testing=True)
+        app.config["SERVER_NAME"] = "central.example.com"
+        client = app.test_client()
+        client.environ_base["HTTP_HOST"] = "central.example.com"
+        client.environ_base["REMOTE_ADDR"] = "127.0.0.1"
+
+        def attempt(remote_chain):
+            return client.post(
+                "/login", data={"password": "wrong"},
+                headers={"Origin": secure_origin, "X-Forwarded-For": remote_chain},
+                base_url=secure_origin,
+            )
+
+        for _ in range(6):
+            self.assertEqual(attempt("203.0.113.9, 198.51.100.40").status_code, 401)
+        self.assertEqual(attempt("192.0.2.50, 198.51.100.40").status_code, 429)
+        # ProxyFix trusts the nearest (rightmost) address from the single Tunnel hop.
+        self.assertEqual(attempt("203.0.113.9, 198.51.100.41").status_code, 401)
+
+        response = client.post(
+            "/login", data={"password": PASSWORD},
+            headers={"Origin": secure_origin, "X-Forwarded-For": "203.0.113.9"},
+            base_url=secure_origin,
+        )
+        self.assertEqual(response.status_code, 302)
+        cookie = response.headers["Set-Cookie"]
+        self.assertIn("__Host-central_session", cookie)
+        self.assertIn("Secure", cookie)
+        self.assertIn("HttpOnly", cookie)
+        self.assertIn("SameSite=Strict", cookie)
+        self.assertEqual(client.get("/healthz", headers={"Host": "evil.example"},
+                                    base_url=secure_origin).status_code, 400)
+        self.assertEqual(client.post("/login", data={"password": PASSWORD},
+                                     headers={"Origin": "https://evil.example"},
+                                     base_url=secure_origin).status_code, 403)
+
     def test_expired_session_is_rejected(self):
         self.login()
         sessions = self.app.extensions["central_state"]["sessions"]
