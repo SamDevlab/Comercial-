@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar · Central Comercial</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="auth-screen">
+  <main class="login-card">
+    <div class="brand-mark">WS<span>.</span></div>
+    <p class="eyebrow">ACESSO RESTRITO</p>
+    <h1>Central Comercial</h1>
+    <p class="muted">Propostas personalizadas da Tec Escola, enviadas pelo Lark Mail.</p>
+    {% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" action="{{ url_for('login') }}" autocomplete="off">
+      <label for="password">Senha de acesso</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+      <button class="primary full" type="submit">Entrar na central</button>
+    </form>
+    <small>O acesso é pessoal. As credenciais nunca são armazenadas no GitHub.</small>
+  </main>
+</body>
+</html>

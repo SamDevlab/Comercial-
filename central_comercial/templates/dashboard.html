@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Central Comercial · Tec Escola</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-inner">
+      <div class="top-logo">WS<span>.</span></div>
+      <span class="top-title">Central Comercial <span class="top-sep">/</span> Tec Escola</span>
+      <button type="button" class="signout" id="logout">Sair <span aria-hidden="true">↗</span></button>
+    </div>
+  </header>
+  <main class="shell">
+    <div class="heading">
+      <div>
+        <p class="eyebrow">PROPOSTAS PERSONALIZADAS</p>
+        <h1>Prepare e envie propostas</h1>
+        <p class="muted">Preencha uma vez, confira o e-mail como o cliente verá e autorize o envio pelo Lark.</p>
+      </div>
+      <div class="status {% if smtp_ready %}connected{% else %}offline{% endif %}">
+        <span class="status-dot"></span>
+        {% if smtp_ready %}Lark configurado{% else %}Lark não configurado{% endif %}
+      </div>
+    </div>
+    <div class="workspace">
+      <section class="panel editor" aria-labelledby="editor-title">
+        <div class="panel-heading">
+          <div class="number">01</div>
+          <div><h2 id="editor-title">Dados do envio</h2><p>Um destinatário por vez, com revisão obrigatória.</p></div>
+        </div>
+        <form id="proposal-form">
+          <label for="template">Modelo de comunicação</label>
+          <select name="template" id="template" required>
+            <option value="institucional" data-subject="Conheça a Tec Escola">Apresentação institucional</option>
+            <option value="proposta" data-subject="Sua proposta comercial Tec Escola está pronta">Proposta comercial</option>
+          </select>
+          <div class="rule"></div>
+          <label for="destinatario">E-mail do destinatário <em>*</em></label>
+          <input id="destinatario" type="email" name="destinatario" placeholder="direcao@colegio.com.br" maxlength="254" required>
+          <div class="two-fields">
+            <div><label for="responsavel">Nome do responsável <em>*</em></label>
+              <input id="responsavel" name="responsavel" placeholder="Maria Silva" maxlength="120" required></div>
+            <div><label for="instituicao">Instituição</label>
+              <input id="instituicao" name="instituicao" placeholder="Colégio Exemplo" maxlength="120"></div>
+          </div>
+          <label for="consultor">Consultor responsável</label>
+          <input id="consultor" name="consultor" placeholder="Equipe Comercial" maxlength="120">
+          <label for="assunto">Assunto <em>*</em></label>
+          <input id="assunto" name="assunto" value="Conheça a Tec Escola" maxlength="160" required>
+          <div class="rule"></div>
+          <label for="pdf">Anexo PDF obrigatório <em>*</em></label>
+          <div class="upload-box">
+            <input id="pdf" name="pdf" type="file" accept=".pdf,application/pdf" required>
+            <p>Até 8 MB. O documento não é salvo no servidor após o envio.</p>
+          </div>
+          <button type="submit" id="preview-button" class="primary full">Gerar prévia para revisão <span aria-hidden="true">→</span></button>
+        </form>
+      </section>
+      <section class="panel review" aria-labelledby="review-title">
+        <div class="panel-heading">
+          <div class="number">02</div>
+          <div><h2 id="review-title">Prévia e confirmação</h2><p>Exibição do HTML original sem copiar e colar no Lark.</p></div>
+        </div>
+        <div class="preview-empty" id="preview-empty">
+          <div class="preview-symbol" aria-hidden="true">✉</div>
+          <h3>Sua proposta aparecerá aqui</h3>
+          <p>Preencha os dados, selecione o PDF e gere uma prévia.</p>
+        </div>
+        <div id="preview-ready" hidden>
+          <div class="review-meta">
+            <p><strong>Para:</strong> <span id="review-recipient"></span></p>
+            <p><strong>Assunto:</strong> <span id="review-subject"></span></p>
+            <p><strong>Anexo:</strong> <span id="review-pdf"></span></p>
+          </div>
+          <iframe id="email-frame" title="Prévia do corpo do e-mail" sandbox="" referrerpolicy="no-referrer"></iframe>
+          <p class="fineprint">A prévia expira em 10 minutos e não garante aparência idêntica em todos os clientes de e-mail.</p>
+          <button id="send-button" class="primary full" type="button" {% if not smtp_ready %}disabled{% endif %}>
+            Confirmar e enviar pelo Lark
+          </button>
+          {% if not smtp_ready %}
+          <p class="notice warning">O SMTP precisa ser configurado no ambiente privado antes de enviar. A prévia já funciona.</p>
+          {% endif %}
+        </div>
+        <p id="message" class="notice" role="status" aria-live="polite" hidden></p>
+      </section>
+    </div>
+    <footer>Central Comercial · Acesso privado · Nenhuma proposta é enviada sem confirmação</footer>
+  </main>
+</body>
+</html>
