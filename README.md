@@ -44,32 +44,32 @@ Veja `.env.example` para os nomes sem valores secretos. A aplicação não lê `
 
 ## Lark SMTP
 
-O transporte usa SMTP SSL com validação normal de certificado, timeout de 25 segundos, servidor `smtp.larksuite.com` e porta `465`. A documentação oficial do Lark exige habilitação administrativa para clientes externos e uma senha dedicada gerada no aplicativo desktop: [Login no Lark Mail por cliente de e-mail externo](https://www.larksuite.com/hc/en-US/articles/378111206512-log-in-to-lark-mail-through-a-third-party-email-client).
+O transporte usa SMTP SSL com validação normal de certificado, servidor `smtp.larksuite.com` e porta `465`. A documentação oficial do Lark exige habilitação administrativa para clientes externos e uma senha dedicada gerada no aplicativo desktop: [Login no Lark Mail por cliente de e-mail externo](https://www.larksuite.com/hc/en-US/articles/378111206512-log-in-to-lark-mail-through-a-third-party-email-client).
 
-Não há teste automatizado que envie mensagem. Os testes substituem o transporte por uma função simulada. O status “Lark configurado” só confirma que as duas variáveis parecem presentes; não autentica a conta nem confirma entrega.
+O botão “Testar autenticação sem enviar” abre uma conexão SSL e autentica sem criar uma mensagem. A rota exige sessão, Origin e token CSRF, limita tentativas a uma por minuto e não retorna respostas SMTP privadas. Uma autenticação válida permite envio por 15 minutos; o painel não armazena a senha no navegador. O envio continua exigindo prévia e confirmação explícita. Uma resposta de aceitação SMTP não confirma entrega.
 
 ## Segurança e operação
 
 - Uma conta administrativa protegida por hash scrypt; cookies assinados, `HttpOnly`, `SameSite=Strict` e `Secure` quando a origem é HTTPS.
 - Sessões expiram em 8 horas; rascunhos em 10 minutos. Logout revoga a sessão e apaga seus rascunhos.
 - CSRF exige `Origin` exata e token no formulário autenticado. `Host` é conferido, headers de segurança e CSP são definidos.
-- Bloqueio de tentativa de login por IP, limite de 20 tentativas de envio por hora e reserva atômica para impedir reenvio concorrente do mesmo rascunho.
+- Bloqueio de tentativa de login por IP, limite de 20 tentativas de envio por hora, autenticação SMTP obrigatória antes do envio e reserva atômica para impedir reenvio concorrente do mesmo rascunho.
 - PDF é limitado, validado por cabeçalho e marcador final, tem nome sanitizado e fica somente em memória; não é extraído nem executado.
 - Histórico temporário da sessão mostra data, modelo e resultado, sem guardar destinatário, assunto, corpo ou credenciais. Ele desaparece ao sair ou reiniciar.
 - Estado de sessão, rascunho e limite de envio é em memória. Use uma instância/worker da aplicação; não escale horizontalmente sem migrar esse estado para armazenamento compartilhado.
-- Falhas de autenticação SMTP e de conexão recebem mensagens separadas. Uma tentativa consome o rascunho antes da conexão para evitar duplicidade quando a resposta SMTP for incerta; uma nova tentativa exige nova prévia.
+- Falhas de autenticação SMTP e de conexão recebem mensagens separadas, sem detalhes da resposta do servidor. O log de acesso do Nginx fica desabilitado e o formato de acesso do Gunicorn omite IP, query string e corpo. Uma tentativa de envio consome o rascunho antes da conexão para evitar duplicidade quando a resposta SMTP for incerta; uma nova tentativa exige nova prévia.
 
 Em proxy reverso, preserve `Host`, encaminhe `X-Forwarded-For` de um proxy confiável e configure `CENTRAL_TRUSTED_PROXY_HOPS=1`. O app deve escutar somente em loopback. Não habilite confiança em cabeçalhos encaminhados de tráfego direto da Internet.
 
 ## Implantação Linux isolada
 
-Os arquivos-base de systemd, Nginx e ambiente estão em [`deploy/`](deploy/). Eles são modelos, não foram aplicados a nenhuma VPS. O serviço usa usuário dedicado, Gunicorn com um worker e escuta em loopback; o Nginx exige certificado TLS já provisionado. Ajuste domínio, caminho, limite de upload e políticas de acesso antes de instalar.
+Os arquivos-base de systemd, Nginx e ambiente estão em [`deploy/`](deploy/). Eles são modelos, não foram aplicados a nenhuma VPS. O serviço usa usuário dedicado, Gunicorn com um worker e escuta em loopback; o Nginx exige certificado TLS já provisionado. Ajuste domínio, caminho, limite de upload e políticas de acesso antes de instalar. O workflow valida a instalação do manifesto Linux e inicia o Gunicorn em um runner GitHub efêmero para consultar `/healthz`; isso não é um deploy nem valida o certificado ou proxy de uma hospedagem real.
 
 Situação desta campanha: `DEPLOY=BLOCKED`. Não há ambiente de homologação isolado, domínio autorizado ou acesso demonstrável à VPS nesta sessão. Nenhuma produção, DNS, Cloudflare ou serviço foi alterado. Não exponha o painel antes de configurar HTTPS, acesso privado (por exemplo VPN ou controle de acesso já autorizado), hash de senha, segredo e credenciais SMTP.
 
 ## ChatGPT Work
 
-O painel tem labels, controles nativos, estados acessíveis e confirmação no navegador. Isso prepara uma automação por navegador após a implantação privada. Não existe conector nativo Lark/ChatGPT nem atalho público de envio. O teste específico com sessão real do ChatGPT Work depende de uma instância HTTPS autorizada e sessão autenticada; permanece pendente.
+O painel tem labels, controles nativos, estados acessíveis, confirmação no navegador e seletores `data-testid` estáveis. Isso prepara uma automação por navegador após a implantação privada. Não existe conector nativo Lark/ChatGPT nem atalho público de envio. O teste específico com sessão real do ChatGPT Work depende de uma instância HTTPS autorizada e sessão autenticada; permanece pendente.
 
 ## Testes
 
@@ -78,7 +78,7 @@ python -m compileall -q central_comercial
 python -m unittest discover -s tests -v
 ```
 
-Os testes cobrem autenticação, logout e expiração, origem/Host/CSRF, cookies, isolamento, limites e validação de PDF, escape dos modelos, MIME, confirmação, reenvio concorrente, histórico e erros SMTP simulados. Nenhum teste usa credenciais reais ou envia e-mail. O workflow GitHub Actions roda compilação e a mesma suíte em Python 3.12.
+Os testes cobrem autenticação, logout e expiração, origem/Host/CSRF, cookies, isolamento, limites e validação de PDF, escape dos dois modelos, MIME, confirmação, reenvio concorrente, histórico, diagnóstico SMTP, expiração da autenticação e erros SMTP simulados. Nenhum teste usa credenciais reais ou envia e-mail. O workflow GitHub Actions roda compilação e a suíte em Python 3.12; também inicia Gunicorn com um worker em runner efêmero e testa o health check local.
 
 Layout responsivo é implementado com breakpoints de tablet e celular; a conferência em navegador desktop/mobile deve ser feita após iniciar o servidor local.
 

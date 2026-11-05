@@ -38,6 +38,8 @@ SESSION_TTL = 8 * 60 * 60
 DRAFT_TTL = 10 * 60
 LOGIN_WINDOW = 15 * 60
 SEND_WINDOW = 60 * 60
+SMTP_CHECK_COOLDOWN = 60
+SMTP_AUTH_TTL = 15 * 60
 
 
 def valid_email(value: str) -> bool:
@@ -87,20 +89,30 @@ def render_email(
     }
     for marker, value in replacements.items():
         result = result.replace(marker, html.escape(value, quote=True))
+    additions = []
+    if template_id == "institucional":
+        additions.append(
+            '<p style="margin:16px 0 0; font-size:15px; line-height:24px; color:#425772;">'
+            "Esta apresentação foi preparada para a equipe de <strong>"
+            + html.escape(instituicao, quote=True) + "</strong>.</p>"
+        )
     if mensagem:
         safe_message = html.escape(mensagem, quote=True).replace("\n", "<br>\n")
-        paragraph = (
+        additions.append(
             '<p style="margin:16px 0 0; font-size:15px; line-height:24px; color:#425772;">'
             + safe_message + "</p>"
         )
+    if additions:
         escaped_name = re.escape(html.escape(responsavel, quote=True))
         greeting = re.compile(
             r"(<p\b[^>]*>\s*Olá,\s*<strong>" + escaped_name + r"</strong>!\s*</p>)",
             re.IGNORECASE,
         )
-        result, inserted = greeting.subn(lambda match: match.group(1) + "\n" + paragraph, result, count=1)
+        result, inserted = greeting.subn(
+            lambda match: match.group(1) + "\n" + "\n".join(additions), result, count=1
+        )
         if inserted != 1:
-            raise RuntimeError("Não foi possível inserir a mensagem complementar no modelo.")
+            raise RuntimeError("Não foi possível inserir os dados personalizados no modelo.")
     return result
 
 
@@ -120,6 +132,7 @@ def compose_message(data: dict, sender: str) -> EmailMessage:
     msg["To"] = data["destinatario"]
     msg["Subject"] = data["assunto"]
     plain = "Olá, " + data["responsavel"] + "!\n\n"
+    plain += "Este material foi preparado para a equipe de " + data["instituicao"] + ".\n\n"
     if data.get("mensagem"):
         plain += data["mensagem"] + "\n\n"
     plain += "Segue o material da Tec Escola em anexo.\n"
@@ -138,11 +151,20 @@ def deliver_lark(message: EmailMessage, username: str, app_password: str) -> Non
         smtp.send_message(message)
 
 
+def authenticate_lark(username: str, app_password: str) -> None:
+    """Abre SMTP SSL e valida o login sem enviar mensagem."""
+    with smtplib.SMTP_SSL(
+        "smtp.larksuite.com", 465, timeout=15, context=ssl.create_default_context()
+    ) as smtp:
+        smtp.login(username, app_password)
+
+
 def create_app(*, testing: bool = False) -> Flask:
     app = Flask(__name__, template_folder=str(BASE / "central_comercial" / "templates"),
                 static_folder=str(BASE / "central_comercial" / "static"))
     app.config["TESTING"] = testing
     app.config["SEND_MAIL"] = deliver_lark
+    app.config["CHECK_SMTP_AUTH"] = authenticate_lark
 
     raw_pdf_limit = os.environ.get("CENTRAL_PDF_MAX_BYTES", str(DEFAULT_PDF_LIMIT))
     try:
@@ -186,9 +208,12 @@ def create_app(*, testing: bool = False) -> Flask:
     failed_logins: dict[str, deque] = {}
     recent_sends: deque = deque()
     audit: deque = deque(maxlen=40)
+    smtp_diagnostic = {"status": None, "checked_at": None}
+    smtp_last_attempt = [0.0]
     state_lock = threading.Lock()
     app.extensions["central_state"] = {
         "sessions": sessions, "drafts": drafts, "audit": audit,
+        "smtp_diagnostic": smtp_diagnostic, "smtp_last_attempt": smtp_last_attempt,
     }
     cookie_name = "__Host-central_session" if parsed_origin.scheme == "https" else "central_session"
 
@@ -198,6 +223,27 @@ def create_app(*, testing: bool = False) -> Flask:
 
     def now() -> float:
         return time.time()
+
+    def smtp_configured() -> bool:
+        return bool(valid_email(os.getenv("LARK_SMTP_USER", ""))
+                    and os.getenv("LARK_SMTP_APP_PASSWORD", ""))
+
+    def smtp_status() -> str:
+        if not smtp_configured():
+            return "nao_configurado"
+        with state_lock:
+            status = smtp_diagnostic["status"]
+            checked_at = smtp_diagnostic["checked_at"]
+        if status == "autenticacao_validada" and (
+            checked_at is None or now() - checked_at > SMTP_AUTH_TTL
+        ):
+            return "credenciais_presentes_nao_testadas"
+        return status or "credenciais_presentes_nao_testadas"
+
+    def set_smtp_status(status: str) -> None:
+        with state_lock:
+            smtp_diagnostic["status"] = status
+            smtp_diagnostic["checked_at"] = now()
 
     def identity() -> tuple[str, dict] | None:
         raw_cookie = request.cookies.get(cookie_name, "")
@@ -325,15 +371,80 @@ def create_app(*, testing: bool = False) -> Flask:
         if active is None:
             return redirect(url_for("login_page"))
         _, item = active
+        current_smtp_status = smtp_status()
+        smtp_labels = {
+            "nao_configurado": "SMTP não configurado",
+            "credenciais_presentes_nao_testadas": "Credenciais presentes · não testadas",
+            "autenticacao_validada": "Autenticação validada",
+            "conexao_indisponivel": "Conexão SMTP indisponível",
+            "falha_autenticacao": "Falha de autenticação SMTP",
+            "erro_smtp": "Falha na verificação SMTP",
+        }
         return render_template(
             "dashboard.html", csrf=item["csrf"],
-            templates=TEMPLATES, smtp_ready=bool(
-                valid_email(os.getenv("LARK_SMTP_USER", ""))
-                and os.getenv("LARK_SMTP_APP_PASSWORD", "")
-            ),
+            templates=TEMPLATES,
+            smtp_configured=smtp_configured(),
+            smtp_ready=current_smtp_status == "autenticacao_validada",
+            smtp_status=current_smtp_status,
+            smtp_status_label=smtp_labels[current_smtp_status],
             history=[entry for entry in audit if entry["owner"] == active[0]][:5],
             pdf_limit_mb=app.config["PDF_MAX_MB_LABEL"],
             pdf_limit_bytes=app.config["PDF_MAX_BYTES"],
+        )
+
+    @app.post("/api/smtp/check")
+    def check_smtp():
+        _, item = auth_required()
+        if not csrf_check(item):
+            abort(403)
+        username = os.getenv("LARK_SMTP_USER", "")
+        password = os.getenv("LARK_SMTP_APP_PASSWORD", "")
+        if not valid_email(username) or not password:
+            set_smtp_status("nao_configurado")
+            return jsonify(
+                status="nao_configurado",
+                error="Configure LARK_SMTP_USER e LARK_SMTP_APP_PASSWORD no ambiente privado.",
+            ), 503
+
+        with state_lock:
+            elapsed = now() - smtp_last_attempt[0]
+            if elapsed < SMTP_CHECK_COOLDOWN:
+                wait_seconds = max(1, int(SMTP_CHECK_COOLDOWN - elapsed))
+                latest_status = smtp_diagnostic["status"] or "credenciais_presentes_nao_testadas"
+                return jsonify(
+                    status=latest_status,
+                    error=f"Aguarde {wait_seconds} segundos antes de testar novamente.",
+                ), 429, {"Retry-After": str(wait_seconds)}
+            smtp_last_attempt[0] = now()
+
+        try:
+            app.config["CHECK_SMTP_AUTH"](username, password)
+        except smtplib.SMTPAuthenticationError:
+            set_smtp_status("falha_autenticacao")
+            app.logger.warning("Verificação SMTP falhou na autenticação (sem dados da conta).")
+            return jsonify(
+                status="falha_autenticacao",
+                error="Falha de autenticação. Confira a conta, a senha dedicada e a liberação administrativa de clientes externos.",
+            ), 502
+        except (OSError, ssl.SSLError, smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected):
+            set_smtp_status("conexao_indisponivel")
+            app.logger.warning("Verificação SMTP falhou na conexão (sem dados da conta).")
+            return jsonify(
+                status="conexao_indisponivel",
+                error="Conexão SMTP indisponível. Confira a rede e tente novamente mais tarde.",
+            ), 503
+        except (smtplib.SMTPException, ValueError):
+            set_smtp_status("erro_smtp")
+            app.logger.warning("Verificação SMTP retornou erro (sem dados da conta).")
+            return jsonify(
+                status="erro_smtp",
+                error="O servidor SMTP retornou uma falha durante a verificação.",
+            ), 502
+
+        set_smtp_status("autenticacao_validada")
+        return jsonify(
+            status="autenticacao_validada",
+            message="Autenticação SMTP validada. Nenhuma mensagem foi enviada.",
         )
 
     @app.post("/api/preview")
@@ -405,6 +516,10 @@ def create_app(*, testing: bool = False) -> Flask:
         password = os.getenv("LARK_SMTP_APP_PASSWORD", "")
         if not valid_email(username) or not password:
             return jsonify(error="Lark SMTP ainda não configurado no servidor."), 503
+        if smtp_status() != "autenticacao_validada":
+            return jsonify(
+                error="Teste a autenticação SMTP antes de enviar. O teste não envia mensagem."
+            ), 409
         with state_lock:
             draft = drafts.get(draft_id)
             if not draft or draft["owner"] != sid or draft["expires"] < now():
@@ -420,20 +535,23 @@ def create_app(*, testing: bool = False) -> Flask:
             message = compose_message(draft, username)
             app.config["SEND_MAIL"](message, username, password)
         except smtplib.SMTPAuthenticationError:
+            set_smtp_status("falha_autenticacao")
             audit.appendleft({"quando": datetime.now(timezone.utc).isoformat(),
                               "modelo": draft["template"], "status": "falha_autenticacao", "owner": sid})
             app.logger.warning("Envio SMTP falhou (sem dados do destinatário).")
-            return jsonify(error="A autenticação SMTP do Lark falhou. Confira a conta, a senha dedicada e a liberação de clientes externos."), 502
+            return jsonify(status="falha_autenticacao", error="A autenticação SMTP do Lark falhou. Confira a conta, a senha dedicada e a liberação de clientes externos."), 502
         except (OSError, ssl.SSLError, smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected):
+            set_smtp_status("conexao_indisponivel")
             audit.appendleft({"quando": datetime.now(timezone.utc).isoformat(),
                               "modelo": draft["template"], "status": "falha_conexao", "owner": sid})
             app.logger.warning("Envio SMTP falhou (sem dados do destinatário).")
-            return jsonify(error="Não foi possível concluir a conexão SMTP do Lark. Verifique rede e configuração; gere uma nova prévia antes de tentar novamente."), 502
+            return jsonify(status="conexao_indisponivel", error="Não foi possível concluir a conexão SMTP do Lark. Verifique rede e configuração; gere uma nova prévia antes de tentar novamente."), 502
         except (smtplib.SMTPException, ValueError):
+            set_smtp_status("erro_smtp")
             audit.appendleft({"quando": datetime.now(timezone.utc).isoformat(),
                               "modelo": draft["template"], "status": "falha_servidor", "owner": sid})
             app.logger.warning("Envio SMTP falhou (sem dados do destinatário).")
-            return jsonify(error="O servidor SMTP do Lark rejeitou a mensagem. Confira o remetente e o limite de envio."), 502
+            return jsonify(status="erro_smtp", error="O servidor SMTP do Lark rejeitou a mensagem. Confira o remetente e o limite de envio."), 502
 
         audit.appendleft({"quando": datetime.now(timezone.utc).isoformat(),
                           "modelo": draft["template"], "status": "aceito_pelo_smtp", "owner": sid})

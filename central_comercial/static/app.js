@@ -6,12 +6,15 @@
   const subject = document.getElementById("assunto");
   const previewButton = document.getElementById("preview-button");
   const sendButton = document.getElementById("send-button");
+  const smtpStatus = document.getElementById("smtp-status");
+  const smtpCheckButton = document.getElementById("smtp-check-button");
+  const smtpCheckMessage = document.getElementById("smtp-check-message");
   const message = document.getElementById("message");
   const previewEmpty = document.getElementById("preview-empty");
   const previewReady = document.getElementById("preview-ready");
   const pdfInput = document.getElementById("pdf");
   const pdfLimit = Number(pdfInput.dataset.maxBytes);
-  const smtpReady = sendButton.dataset.smtpReady === "true";
+  let smtpReady = sendButton.dataset.smtpReady === "true";
   let draftId = null;
   let recipient = null;
   let previewPdfName = null;
@@ -22,11 +25,32 @@
     message.textContent = text;
     message.className = "notice " + (isError ? "error" : "success");
   }
+  function updateSmtpStatus(status) {
+    const labels = {
+      nao_configurado: "SMTP não configurado",
+      credenciais_presentes_nao_testadas: "Credenciais presentes · não testadas",
+      autenticacao_validada: "Autenticação validada",
+      conexao_indisponivel: "Conexão SMTP indisponível",
+      falha_autenticacao: "Falha de autenticação SMTP",
+      erro_smtp: "Falha na verificação SMTP"
+    };
+    if (!Object.prototype.hasOwnProperty.call(labels, status)) return;
+    smtpStatus.dataset.status = status;
+    document.getElementById("smtp-status-label").textContent = labels[status] || "Status SMTP indisponível";
+    const passed = status === "autenticacao_validada";
+    const failed = ["falha_autenticacao", "conexao_indisponivel", "erro_smtp"].includes(status);
+    smtpStatus.className = "status " + (passed ? "connected" : (failed ? "failed" : "offline"));
+    smtpReady = passed;
+    sendButton.dataset.smtpReady = passed ? "true" : "false";
+    sendButton.disabled = !passed || !draftId;
+    const sendHelp = document.getElementById("smtp-send-help");
+    if (sendHelp) sendHelp.hidden = passed;
+  }
   function invalidatePreview() {
     draftId = null;
     previewReady.hidden = true;
     previewEmpty.hidden = false;
-    if (sendButton) sendButton.disabled = !smtpReady;
+    if (sendButton) sendButton.disabled = true;
     message.hidden = true;
   }
   template.addEventListener("change", function () {
@@ -35,6 +59,32 @@
   });
   form.addEventListener("input", invalidatePreview);
   form.addEventListener("change", invalidatePreview);
+
+  smtpCheckButton.addEventListener("click", async function () {
+    smtpCheckButton.disabled = true;
+    smtpCheckMessage.hidden = true;
+    smtpCheckButton.textContent = "Testando autenticação...";
+    try {
+      const result = await fetch("/api/smtp/check", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrf},
+        credentials: "same-origin"
+      });
+      const data = await result.json();
+      if (data.status) updateSmtpStatus(data.status);
+      if (!result.ok) throw new Error(data.error || "Não foi possível validar o SMTP.");
+      smtpCheckMessage.hidden = false;
+      smtpCheckMessage.className = "notice success";
+      smtpCheckMessage.textContent = data.message;
+    } catch (error) {
+      smtpCheckMessage.hidden = false;
+      smtpCheckMessage.className = "notice error";
+      smtpCheckMessage.textContent = error.message || "Falha na verificação SMTP.";
+    } finally {
+      smtpCheckButton.disabled = smtpStatus.dataset.status === "nao_configurado";
+      smtpCheckButton.textContent = "Testar autenticação sem enviar";
+    }
+  });
 
   form.addEventListener("submit", async function (event) {
     event.preventDefault();
@@ -68,7 +118,8 @@
       document.getElementById("email-frame").srcdoc = data.html;
       previewEmpty.hidden = true;
       previewReady.hidden = false;
-      sendButton.disabled = !smtpReady;
+      sendButton.disabled = !smtpReady || !draftId;
+      sendButton.textContent = "Confirmar e enviar pelo Lark";
       message.hidden = true;
       sendButton.focus();
     } catch (error) {
@@ -100,6 +151,7 @@
         body: JSON.stringify({draft_id: id, confirmacao: "ENVIAR"})
       });
       const data = await result.json();
+      if (data.status) updateSmtpStatus(data.status);
       if (!result.ok) throw new Error(data.error || "Falha no envio.");
       notice(data.message, false);
       sendButton.textContent = "Envio aceito pelo Lark";

@@ -32,7 +32,9 @@ class CentralTests(unittest.TestCase):
         self.app = create_app(testing=True)
         self.app.config["SERVER_NAME"] = "127.0.0.1:8765"
         self.sent = []
+        self.auth_checks = []
         self.app.config["SEND_MAIL"] = lambda *args: self.sent.append(args)
+        self.app.config["CHECK_SMTP_AUTH"] = lambda *args: self.auth_checks.append(args)
         self.client = self.app.test_client()
         self.client.environ_base["HTTP_HOST"] = "127.0.0.1:8765"
 
@@ -66,10 +68,16 @@ class CentralTests(unittest.TestCase):
             headers={"Origin": ORIGIN, "X-CSRF-Token": csrf},
         )
 
+    def check_smtp(self, csrf, *, client=None):
+        return (client or self.client).post(
+            "/api/smtp/check", headers={"Origin": ORIGIN, "X-CSRF-Token": csrf},
+        )
+
     def test_login_and_private_routes(self):
         self.assertEqual(self.client.get("/").status_code, 302)
         self.assertEqual(self.client.get("/login").status_code, 200)
         self.assertEqual(self.client.post("/api/preview").status_code, 403)
+        self.assertEqual(self.client.post("/api/smtp/check", headers={"Origin": ORIGIN}).status_code, 401)
         response = self.client.post("/api/send", json={"confirmacao": "ENVIAR"},
                                     headers={"Origin": ORIGIN})
         self.assertEqual(response.status_code, 401)
@@ -88,6 +96,8 @@ class CentralTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/preview").status_code, 403)
         self.assertEqual(self.client.post("/api/preview", headers={
             "Origin": "https://evil.example"}).status_code, 403)
+        self.assertEqual(self.client.post("/api/smtp/check", headers={
+            "Origin": ORIGIN}).status_code, 403)
         self.assertEqual(self.client.get("/", headers={"Host": "evil.example"}).status_code, 400)
         response = self.client.post("/api/preview", headers={"Origin": ORIGIN})
         self.assertEqual(response.status_code, 403)
@@ -150,6 +160,7 @@ class CentralTests(unittest.TestCase):
         for body in (institutional, proposal):
             self.assertIn("A &amp; B", body)
             self.assertIn("Olá &lt;script&gt;<br>\nTudo bem?", body)
+            self.assertIn("Escola &lt;Beta&gt;", body)
             self.assertNotIn("[Nome do responsável]", body)
             self.assertNotIn("<script>", body)
         self.assertIn("Escola &lt;Beta&gt;", proposal)
@@ -211,6 +222,8 @@ class CentralTests(unittest.TestCase):
         csrf = self.login()
         draft_id = self.preview(csrf, mensagem="Acompanhe a reunião na sexta.").get_json()["draft_id"]
         self.assertEqual(self.send(csrf, draft_id, confirm="NAO").status_code, 400)
+        self.assertEqual(self.send(csrf, draft_id).status_code, 409)
+        self.assertEqual(self.check_smtp(csrf).status_code, 200)
         response = self.send(csrf, draft_id)
         self.assertEqual(response.status_code, 200, response.get_json())
         self.assertEqual(response.get_json()["status"], "aceito_pelo_smtp")
@@ -220,6 +233,7 @@ class CentralTests(unittest.TestCase):
         self.assertEqual(user, "comercial@example.com")
         self.assertEqual(password, "dummy-nonprod")
         self.assertIn("Acompanhe a reunião na sexta.", message.get_body(preferencelist=("plain",)).get_content())
+        self.assertIn("Escola <Beta>", message.get_body(preferencelist=("plain",)).get_content())
         html_part = message.get_body(preferencelist=("html",))
         self.assertEqual(html_part.get_content_type(), "text/html")
         self.assertIn("Acompanhe a reunião na sexta.", html_part.get_content())
@@ -234,6 +248,7 @@ class CentralTests(unittest.TestCase):
 
     def test_concurrent_duplicate_send_is_consumed_once(self):
         csrf = self.login()
+        self.assertEqual(self.check_smtp(csrf).status_code, 200)
         draft_id = self.preview(csrf).get_json()["draft_id"]
         entered = threading.Event()
         release = threading.Event()
@@ -261,6 +276,7 @@ class CentralTests(unittest.TestCase):
 
     def test_smtp_auth_network_failure_and_missing_configuration(self):
         csrf = self.login()
+        self.assertEqual(self.check_smtp(csrf).status_code, 200)
         draft_id = self.preview(csrf).get_json()["draft_id"]
         self.app.config["SEND_MAIL"] = lambda *_: (_ for _ in ()).throw(
             smtplib.SMTPAuthenticationError(535, b"private server detail"))
@@ -270,6 +286,9 @@ class CentralTests(unittest.TestCase):
         self.assertNotIn("private server detail", auth_failure.get_json()["error"])
 
         draft_id = self.preview(csrf).get_json()["draft_id"]
+        attempts = self.app.extensions["central_state"]["smtp_last_attempt"]
+        attempts[0] = time.time() - 61
+        self.assertEqual(self.check_smtp(csrf).status_code, 200)
         self.app.config["SEND_MAIL"] = lambda *_: (_ for _ in ()).throw(TimeoutError())
         network_failure = self.send(csrf, draft_id)
         self.assertEqual(network_failure.status_code, 502)
@@ -277,17 +296,24 @@ class CentralTests(unittest.TestCase):
 
         draft_id = self.preview(csrf).get_json()["draft_id"]
         with patch.dict(os.environ, {"LARK_SMTP_USER": "", "LARK_SMTP_APP_PASSWORD": ""}):
+            missing_check = self.check_smtp(csrf)
             missing_config = self.send(csrf, draft_id)
+        self.assertEqual(missing_check.status_code, 503)
+        self.assertEqual(missing_check.get_json()["status"], "nao_configurado")
         self.assertEqual(missing_config.status_code, 503)
         self.app.config["SEND_MAIL"] = lambda *args: self.sent.append(args)
+        attempts[0] = time.time() - 61
+        self.assertEqual(self.check_smtp(csrf).status_code, 200)
         self.assertEqual(self.send(csrf, draft_id).status_code, 200)
 
     def test_history_is_visible_and_isolated_per_session(self):
         csrf = self.login()
+        self.assertEqual(self.check_smtp(csrf).status_code, 200)
         draft_id = self.preview(csrf).get_json()["draft_id"]
         self.assertEqual(self.send(csrf, draft_id).status_code, 200)
         page = self.client.get("/")
         self.assertIn(b"Aceito pelo SMTP", page.data)
+        self.assertIn(b"entrega n\303\243o confirmada", page.data)
         other = self.app.test_client()
         other.environ_base["HTTP_HOST"] = "127.0.0.1:8765"
         self.login(other)
@@ -299,6 +325,59 @@ class CentralTests(unittest.TestCase):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_data(as_text=True), "ok")
+
+    def test_smtp_authentication_diagnostic_is_private_and_sends_nothing(self):
+        csrf = self.login()
+        response = self.check_smtp(csrf)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["status"], "autenticacao_validada")
+        self.assertIn("Nenhuma mensagem foi enviada", response.get_json()["message"])
+        self.assertEqual(self.auth_checks, [("comercial@example.com", "dummy-nonprod")])
+        self.assertEqual(self.sent, [])
+        page = self.client.get("/")
+        self.assertIn("Autenticação validada".encode(), page.data)
+        self.assertNotIn(b"dummy-nonprod", page.data)
+
+    def test_missing_smtp_configuration_is_explicit_in_dashboard(self):
+        self.login()
+        with patch.dict(os.environ, {"LARK_SMTP_USER": "", "LARK_SMTP_APP_PASSWORD": ""}):
+            page = self.client.get("/")
+            self.assertIn("SMTP não configurado".encode(), page.data)
+            self.assertIn(b'id="smtp-check-button" data-testid="smtp-check-button" class="secondary-button" disabled', page.data)
+            self.assertIn(b"LARK_SMTP_USER e LARK_SMTP_APP_PASSWORD", page.data)
+
+    def test_smtp_diagnostic_failures_are_generic_and_rate_limited(self):
+        csrf = self.login()
+        self.app.config["CHECK_SMTP_AUTH"] = lambda *_: (_ for _ in ()).throw(
+            smtplib.SMTPAuthenticationError(535, b"private smtp details"))
+        auth_failure = self.check_smtp(csrf)
+        self.assertEqual(auth_failure.status_code, 502)
+        self.assertEqual(auth_failure.get_json()["status"], "falha_autenticacao")
+        self.assertNotIn("private smtp details", auth_failure.get_json()["error"])
+
+        attempts = self.app.extensions["central_state"]["smtp_last_attempt"]
+        attempts[0] = time.time() - 61
+        self.app.config["CHECK_SMTP_AUTH"] = lambda *_: (_ for _ in ()).throw(TimeoutError())
+        network_failure = self.check_smtp(csrf)
+        self.assertEqual(network_failure.status_code, 503)
+        self.assertEqual(network_failure.get_json()["status"], "conexao_indisponivel")
+
+        attempts[0] = time.time() - 61
+        self.app.config["CHECK_SMTP_AUTH"] = lambda *args: self.auth_checks.append(args)
+        self.assertEqual(self.check_smtp(csrf).status_code, 200)
+        limited = self.check_smtp(csrf)
+        self.assertEqual(limited.status_code, 429)
+        self.assertIn("Retry-After", limited.headers)
+
+    def test_smtp_authentication_must_be_recent_before_send(self):
+        csrf = self.login()
+        draft_id = self.preview(csrf).get_json()["draft_id"]
+        self.assertEqual(self.send(csrf, draft_id).status_code, 409)
+        self.assertEqual(self.check_smtp(csrf).status_code, 200)
+        state = self.app.extensions["central_state"]["smtp_diagnostic"]
+        state["checked_at"] = time.time() - 16 * 60
+        self.assertEqual(self.send(csrf, draft_id).status_code, 409)
+        self.assertEqual(self.sent, [])
 
 
 if __name__ == "__main__":
