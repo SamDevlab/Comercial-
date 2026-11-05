@@ -59,3 +59,31 @@ DNSSEC_CLOUDFLARE=NOT_CONFIGURED
 TUNNEL_ACCESS=NOT_CREATED
 PRODUCTION_CHANGED=NO
 ```
+
+## Atualização V8 — fluxo integrado autorizado, recibo pendente
+
+Em 2026-11-05, o proprietário autorizou o fluxo integrado oficial do Registro.br. Antes do único envio, foram reconfirmados:
+
+- Sete registros com correspondência exata entre a tabela autenticada do Registro.br e a zona Cloudflare (3 MX e 4 TXT), todos DNS-only na conta `Samusilvadev`.
+- `ali.ns.cloudflare.com` e `apollo.ns.cloudflare.com` responderam diretamente com o SOA da zona e flag DNS `auth. answer` (`NOERROR`).
+- A zona Cloudflare continuava pendente de delegação.
+
+Os campos do Registro.br foram preenchidos somente com os dois nameservers aprovados. Após uma única confirmação, a página redirecionou para `registro.br/login/?session=required` em vez de apresentar recibo. Nenhum segundo envio foi feito.
+
+As consultas técnicas subsequentes confirmaram que, em duas observações, o DS `46835` seguia publicado nos seis servidores `.br` com TTL de 3600 s, os resolvedores `1.1.1.1` e `8.8.8.8` ainda retornavam `b.sec.dns.br` e `c.sec.dns.br`, e os três MX do Lark continuavam resolvendo. Esse estado inicial é compatível com o atraso documentado do Registro.br, mas não comprova que o pedido foi aceito.
+
+**Estado do envio: SUBMIT_ATTEMPTED_UNCONFIRMED.** A sessão do Registro.br expirou; é necessário reautenticar e conferir no painel se a solicitação integrada está pendente ou foi aceita. Não reenviar a alteração nem avançar DNSSEC/Tunnel/Access até essa confirmação. O TTL de espera e a transição da delegação ainda não podem ser considerados concluídos.
+
+```text
+PRE_SUBMIT_INVENTORY=PASS_EXACT_7
+PRE_SUBMIT_CLOUDFLARE_NS_AUTHORITY=PASS_BOTH
+REGISTRO_BR_REQUEST=SUBMIT_ATTEMPTED_UNCONFIRMED
+REGISTRO_BR_SESSION=RELOGIN_REQUIRED
+OLD_DS=STILL_PUBLISHED_TTL_3600
+PUBLIC_NS=STILL_REGISTRO_BR_AT_LAST_CHECK
+LARK_MX=RESOLVING_AT_LAST_CHECK
+RESUBMISSION=NO
+DNSSEC_CLOUDFLARE=NOT_CONFIGURED
+TUNNEL_ACCESS=NOT_CREATED
+PRODUCTION_CHANGED=NO_CONFIRMED_CHANGE
+```
