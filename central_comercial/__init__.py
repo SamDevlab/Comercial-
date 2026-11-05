@@ -105,6 +105,12 @@ def create_app(*, testing: bool = False) -> Flask:
             or parsed_origin.path or parsed_origin.query or parsed_origin.fragment):
         raise RuntimeError("CENTRAL_PUBLIC_ORIGIN deve conter apenas origem, sem caminho.")
     app.config["PUBLIC_ORIGIN"] = expected_origin
+    # O mesmo fail-closed vale para execução por WSGI, não apenas pelo comando CLI.
+    secret = os.getenv("CENTRAL_SESSION_SECRET", "")
+    if not testing and (len(secret) < 32 or not os.getenv("CENTRAL_ADMIN_PASSWORD_HASH", "")):
+        raise RuntimeError("Configure o hash de acesso e o segredo de sessão antes de iniciar.")
+    if not secret:
+        secret = secrets.token_urlsafe(48)
 
     # Estado de uma instancia: sem dados de clientes ou PDFs gravados em disco.
     sessions: dict[str, dict] = {}
@@ -115,13 +121,23 @@ def create_app(*, testing: bool = False) -> Flask:
     app.extensions["central_state"] = {
         "sessions": sessions, "drafts": drafts, "audit": audit,
     }
-    cookie_name = "central_session"
+    cookie_name = "__Host-central_session" if parsed_origin.scheme == "https" else "central_session"
+
+    def signed_session(sid: str) -> str:
+        signature = hmac.new(secret.encode("utf-8"), sid.encode("ascii"), hashlib.sha256).hexdigest()
+        return sid + "." + signature
 
     def now() -> float:
         return time.time()
 
     def identity() -> tuple[str, dict] | None:
-        key = request.cookies.get(cookie_name, "")
+        raw_cookie = request.cookies.get(cookie_name, "")
+        if "." not in raw_cookie:
+            return None
+        key, supplied_signature = raw_cookie.rsplit(".", 1)
+        correct_signature = signed_session(key).rsplit(".", 1)[1]
+        if not hmac.compare_digest(supplied_signature, correct_signature):
+            return None
         item = sessions.get(key)
         if item and item["expires"] > now():
             return key, item
@@ -207,7 +223,7 @@ def create_app(*, testing: bool = False) -> Flask:
         sessions[sid] = {"csrf": secrets.token_urlsafe(32), "expires": now() + SESSION_TTL}
         response = make_response(redirect(url_for("dashboard")))
         response.set_cookie(
-            cookie_name, sid, secure=(parsed_origin.scheme == "https"),
+            cookie_name, signed_session(sid), secure=(parsed_origin.scheme == "https"),
             httponly=True, samesite="Strict", path="/", max_age=SESSION_TTL,
         )
         return response
