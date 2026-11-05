@@ -18,9 +18,9 @@ Data da verificação: 2026-11-05
 
 O painel Cloudflare exibiu “Update your nameservers to activate Cloudflare”. A zona ainda não é autoritativa e os nameservers no Registro.br permanecem os atuais.
 
-## Inventário DNS verificado publicamente
+## Inventário DNS verificado no Registro.br e comparado com Cloudflare
 
-O Cloudflare importou seis registros, todos com proxy desativado: três MX e três TXT. Os valores conferidos contra respostas públicas foram:
+O modo avançado da zona DNS no Registro.br apresentou sete registros. A transferência AXFR pública foi recusada, mas a tabela autenticada do Registro.br forneceu o inventário completo. O Cloudflare importou seis registros inicialmente; o DKIM ausente foi adicionado à zona pendente a partir da fonte autenticada. Os sete registros Cloudflare estão DNS-only.
 
 | Tipo | Nome | Valor | Estado |
 | --- | --- | --- | --- |
@@ -30,10 +30,11 @@ O Cloudflare importou seis registros, todos com proxy desativado: três MX e tr�
 | TXT | `@` | `v=spf1 +include:spf.onlarksuite.com -all` | Preservado |
 | TXT | `_dmarc` | `v=DMARC1; p=none;` | Preservado |
 | TXT | `@` | Verificação do Lark presente | Preservado; conteúdo omitido deste relatório |
+| TXT | `lark2610221127._domainkey` | DKIM do Lark; chave pública conferida sem reproduzi-la aqui | Adicionado e validado como equivalente ao registro do Registro.br |
 
-Não foram observados registros A, AAAA ou CNAME no apex nem em `www`. O painel também alerta que esses registros não estão presentes. Não foram encontrados resultados nos nomes comuns de serviços consultados. Isso não prova inexistência de hostnames personalizados.
+Não há registros A, AAAA ou CNAME no apex nem em `www` na tabela do Registro.br ou na zona Cloudflare. O destino de hospedagem do site não está definido por esses registros; nenhum destino foi inventado. A tabela autenticada do Registro.br não apresenta outros registros DNS.
 
-**Inventário completo ainda pendente.** A transferência AXFR foi recusada pelos servidores autoritativos. A varredura automática Cloudflare declara que pode omitir registros não comuns e subdomínios personalizados. É necessário comparar a lista no painel autenticado do Registro.br ou um export da zona antes de autorizar delegação. Nenhum registro foi inventado para o site.
+**Inventário DNS = PASS.** A comparação foi feita linha por linha entre a tabela avançada do Registro.br e a zona Cloudflare recarregada. A zona Cloudflare passou a exibir sete registros, incluindo o DKIM do Lark. Nenhum registro de site foi criado sem destino confirmado.
 
 ## DNSSEC atual
 
@@ -52,9 +53,9 @@ Referências Cloudflare: [setup completo](https://developers.cloudflare.com/dns/
 
 ### Antes de qualquer mudança de delegação
 
-1. Obter a listagem/export completo do Registro.br, incluindo A, AAAA, CNAME, MX, TXT, SRV, CAA, TLSA, NS, DKIM, MTA-STS e nomes de serviço personalizados.
-2. Comparar cada nome, tipo, conteúdo, prioridade, peso, porta e TTL com a zona Cloudflare. Corrigir somente diferenças comprovadas. Manter MX, SPF, DKIM, DMARC e registros de serviços de email em DNS-only.
-3. Confirmar os destinos do site e dos outros serviços com o proprietário ou provedor antes de adicionar proxy ou criar registros ausentes.
+1. O inventário foi lido na tabela avançada autenticada do Registro.br e tem sete registros; não havia A, AAAA, CNAME, SRV, CAA, TLSA ou registros adicionais nessa tabela.
+2. Os sete registros foram comparados com Cloudflare; o único ausente era o TXT DKIM, já adicionado. MX, SPF, DKIM, DMARC e verificação Lark permanecem DNS-only.
+3. Confirmar os destinos do site e dos outros serviços com o proprietário ou provedor antes de criar registros de site: o apex e `www` não possuem A/AAAA/CNAME no DNS atual.
 4. Confirmar que a aplicação Cloudflare Access do hostname comercial foi configurada com Allow exclusivo ao email aprovado antes de criar qualquer DNS público para o Tunnel, conforme `ACTIVATION_V5.md`.
 5. Obter autorização específica para trocar nameservers. Ela ainda não foi dada nesta etapa.
 
@@ -76,8 +77,8 @@ Referências Cloudflare: [setup completo](https://developers.cloudflare.com/dns/
 
 ```text
 CLOUDFLARE_ZONE=CREATED_PENDING_DELEGATION
-DNS_INVENTORY=PARTIAL_PENDING_REGISTRO_BR_EXPORT
-LARK_RECORDS=PRESERVED_KNOWN_RECORDS
+DNS_INVENTORY=PASS
+LARK_RECORDS=PRESERVED
 DNSSEC=VERIFIED_CURRENT_DS_PUBLISHED
 NAMESERVER_CHANGE=NOT_EXECUTED
 PRODUCTION_CHANGED=NO
