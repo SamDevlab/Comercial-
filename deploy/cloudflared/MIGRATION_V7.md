@@ -74,16 +74,18 @@ As consultas técnicas subsequentes confirmaram que, em duas observações, o DS
 
 **Estado do envio: SUBMIT_ATTEMPTED_UNCONFIRMED.** A sessão do Registro.br expirou; é necessário reautenticar e conferir no painel se a solicitação integrada está pendente ou foi aceita. Não reenviar a alteração nem avançar DNSSEC/Tunnel/Access até essa confirmação. O TTL de espera e a transição da delegação ainda não podem ser considerados concluídos.
 
+Após a reautenticação manual do proprietário, a página de administração ainda informa “Você está utilizando os servidores DNS do Registro.br”. O formulário de alteração abriu com os campos Server 1 e Server 2 vazios e não exibiu recibo nem status de solicitação pendente. Isso não prova se o envio anterior foi rejeitado ou ficou em processamento. Uma nova rodada DNS confirmou o DS `46835` nos seis servidores `.br`, os nameservers antigos em ambos os resolvedores consultados e os MX do Lark ainda resolvendo. A solicitação permanece inconclusiva e não foi reenviada.
+
 ```text
 PRE_SUBMIT_INVENTORY=PASS_EXACT_7
 PRE_SUBMIT_CLOUDFLARE_NS_AUTHORITY=PASS_BOTH
 REGISTRO_BR_REQUEST=SUBMIT_ATTEMPTED_UNCONFIRMED
-REGISTRO_BR_SESSION=RELOGIN_REQUIRED
+REGISTRO_BR_PANEL=REAUTHENTICATED_NO_RECEIPT_OR_PENDING_STATUS
 OLD_DS=STILL_PUBLISHED_TTL_3600
 PUBLIC_NS=STILL_REGISTRO_BR_AT_LAST_CHECK
 LARK_MX=RESOLVING_AT_LAST_CHECK
 RESUBMISSION=NO
 DNSSEC_CLOUDFLARE=NOT_CONFIGURED
 TUNNEL_ACCESS=NOT_CREATED
-PRODUCTION_CHANGED=NO_CONFIRMED_CHANGE
+PUBLIC_DNS_CHANGE=NOT_SEEN_AT_LAST_CHECK
 ```
