@@ -89,3 +89,35 @@ DNSSEC_CLOUDFLARE=NOT_CONFIGURED
 TUNNEL_ACCESS=NOT_CREATED
 PUBLIC_DNS_CHANGE=NOT_SEEN_AT_LAST_CHECK
 ```
+
+## V8 Recovery — consulta somente leitura
+
+Snapshot DNS coletado em **2026-11-05 20:37:24 -03:00**. O painel autenticado do Registro.br ainda informa que o domínio utiliza o DNS do Registro.br; o formulário de nameservers está vazio e não há aviso visível de solicitação pendente, transição ou recibo. Isso não prova rejeição do envio anterior.
+
+### Delegação e DS
+
+- Consultas NS diretamente aos seis servidores `.br` (`a.dns.br` a `f.dns.br`) retornaram `NOERROR` e os nameservers antigos `b.sec.dns.br` e `c.sec.dns.br`.
+- Consultas DS diretamente aos mesmos seis servidores retornaram tag `46835`, algoritmo `13`, digest type `2`, TTL de `3600` segundos.
+- Os resolvedores recursivos `1.1.1.1` e `8.8.8.8` também retornaram os nameservers antigos.
+
+### Validação DNSSEC e Lark
+
+Consultas DNS-over-HTTPS ao resolvedor validador Google retornaram status DNS `0` e flag `AD=true` para MX, TXT no apex, DMARC e DKIM. Os três MX do Lark e os TXT de SPF, verificação Lark, DKIM e DMARC estão presentes. Valores de verificação e chave DKIM não foram incluídos no relatório. Consultas recursivas a `1.1.1.1` também retornaram os três MX e os quatro TXT sem `SERVFAIL`.
+
+### Cloudflare e janela
+
+A zona `wstecnologiaaplicada.com.br` continua no plano Free da conta `Samusilvadev`, com sete registros DNS e estado `pending` até a delegação. Não há configuração de DNSSEC Cloudflare.
+
+O último horário observável da sessão autenticada do Registro.br é 19:52 -03:00, após o redirecionamento para login. O snapshot DNS foi às 20:37 -03:00, ainda dentro da janela documentada pelo Registro.br: publicação de nameservers após pelo menos duas horas para remoção da chave DNSSEC e transição completa que pode levar até três horas. Portanto, não considero a ausência de mudança imediata como rejeição. Monitorar até **22:52 -03:00** (três horas a partir do limite temporal observável); se permanecer inconclusivo, consultar o suporte oficial antes de qualquer nova solicitação.
+
+```text
+REQUEST_STATUS=SUBMITTED_UNCONFIRMED_WITHIN_REGISTRO_BR_WINDOW
+OLD_DS=PRESENT_TAG_46835_TTL_3600_ON_ALL_SIX_PARENTS
+PARENT_NAMESERVERS=OLD_B_SEC_AND_C_SEC_ON_ALL_SIX_PARENTS
+CLOUDFLARE_ZONE=PENDING_FREE_7_RECORDS
+LARK_DNS=PASS_MX_SPF_VERIFICATION_DKIM_DMARC
+DNSSEC_VALIDATION=PASS_GOOGLE_AD_TRUE_STATUS_0
+RESUBMISSION=NO
+SAFE_TO_RETRY=UNKNOWN
+NEXT_ACTION=MONITOR_UNTIL_22_52_THEN_OFFICIAL_SUPPORT_IF_INCONCLUSIVE
+```
