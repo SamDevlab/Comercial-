@@ -1,0 +1,13 @@
+# V5: somente modelo de configuração. NÃO INICIAR com UUID zero.
+# Usar depois de confirmar Cloudflare Access com política Allow restrita.
+# Credenciais do Tunnel ficam fora do repositório, no perfil protegido do Windows.
+tunnel: 00000000-0000-4000-8000-000000000000
+credentials-file: "C:/Users/REPLACE-ME/.cloudflared/00000000-0000-4000-8000-000000000000.json"
+
+ingress:
+  - hostname: central-comercial.wstecnologiaaplicada.com.br
+    service: http://127.0.0.1:8765
+    originRequest:
+      httpHostHeader: central-comercial.wstecnologiaaplicada.com.br
+      disableChunkedEncoding: true
+  - service: http_status:404
