@@ -121,3 +121,51 @@ RESUBMISSION=NO
 SAFE_TO_RETRY=UNKNOWN
 NEXT_ACTION=MONITOR_UNTIL_22_52_THEN_OFFICIAL_SUPPORT_IF_INCONCLUSIVE
 ```
+
+## V9 Recovery — investigação após a janela
+
+Verificações realizadas em **2026-11-06**, horário de Brasília (UTC−3). O fim da janela de transição e a ausência de mudança observável não foram tratados como prova de rejeição.
+
+### Registro.br e estado da tentativa
+
+Às **07:21**, no painel autenticado, o domínio aparecia como publicado e utilizando os servidores DNS do Registro.br. Não havia aviso de transição, recibo ou estado pendente visível na administração do domínio. A visualização de tickets antigos não exibiu registro da tentativa. Esses sinais não confirmam se o envio anterior foi aceito ou rejeitado.
+
+Como o estado permaneceu inconclusivo depois da janela documentada, foi enviada às **07:23:34** uma única consulta de suporte para `hostmaster@registro.br`, canal oficial indicado na [ajuda do Registro.br](https://registro.br/ajuda/gerenciamento-de-conta). A mensagem pergunta se a solicitação anterior foi recebida, está pendente, foi aceita, rejeitada/cancelada ou não consta no sistema, sem incluir credenciais ou códigos de autenticação. Nenhuma resposta havia chegado até **07:26:38**. Não houve reenvio do formulário.
+
+### DNS, DNSSEC e Lark
+
+Às **07:28:02**, consultas diretas a `a.dns.br` até `f.dns.br` retornaram, em todos os seis servidores, o DS `46835 / algoritmo 13 / digest type 2`, TTL de `3600` segundos, e a delegação antiga para `b.sec.dns.br` e `c.sec.dns.br`.
+
+Na mesma rodada, `1.1.1.1` e `8.8.8.8` também retornaram os nameservers antigos e os três MX do Lark (`mx1`, `mx2` e `mx3.larksuite.com`). Às **07:28:03**, o Google DNS-over-HTTPS respondeu status `0` e `AD=true` para MX, TXT do apex, DMARC e DKIM. Os três MX e os quatro TXT esperados — SPF, verificação Lark, DKIM e DMARC — estavam presentes. Os conteúdos de verificação e da chave DKIM foram omitidos.
+
+Também às **07:28:03**, consultas diretas a `ali.ns.cloudflare.com` e `apollo.ns.cloudflare.com` receberam resposta SOA e encontraram os mesmos três MX e quatro TXT do Lark. Isso confirma que os servidores Cloudflare respondem pela zona preparada, mas os pais .br ainda não delegam o domínio a eles.
+
+O último estado autenticado disponível no painel Cloudflare permanece o snapshot de **2026-11-05 20:37:24**, que mostrava a zona no plano Free, `7/200` registros e estado `pending`. O painel Cloudflare não carregou nesta rodada; por isso esse estado de conta não foi renovado. A delegação pública atual ainda está nos servidores do Registro.br.
+
+### Classificação e próximos passos
+
+Não há evidência pública ou no painel de transição iniciada, e também não há confirmação de rejeição. A solicitação continua **desconhecida e não pode ser reenviada**. A consulta oficial enviada é a próxima fonte de confirmação; se o suporte exigir autenticação ou dados adicionais, deve-se usar o procedimento oficial indicado por ele.
+
+```text
+REQUEST_STATUS=UNKNOWN_AFTER_WINDOW_SUPPORT_QUERY_SENT_NO_REPLY_AT_07_26
+OLD_DS=PRESENT_46835_ALG13_DIGEST2_TTL3600_ON_ALL_SIX_PARENTS
+NEW_DS=NOT_CONFIGURED
+PARENT_NAMESERVERS=OLD_B_SEC_AND_C_SEC_ON_ALL_SIX_PARENTS
+CLOUDFLARE_ZONE=PENDING_LAST_DASHBOARD_OBSERVATION_2026-11-05_20_37; CURRENT_UI_NOT_REFRESHED
+LARK_DNS=PASS_MX_SPF_VERIFICATION_DKIM_DMARC_ON_PUBLIC_AND_CLOUDFLARE_NS
+DNSSEC_VALIDATION=PASS_GOOGLE_DOH_STATUS0_AD_TRUE; OLD_CHAIN_STILL_VALID
+DELEGATION_STATUS=REQUEST_STATUS_UNKNOWN; NO_PUBLIC_TRANSITION
+SAFE_TO_RETRY=NO_WITHOUT_CONFIRMED_NONRECEIPT_OR_REJECTION_AND_NEW_OWNER_AUTHORIZATION
+RETRY_EXECUTED=NO
+SUPPORT_QUERY=EMAIL_SENT_TO_OFFICIAL_REGISTRO_BR_AT_2026-11-06_07_23_34_BRT; NO_REPLY_BY_07_26_38
+CLOUDFLARE_ACCESS=NOT_CREATED
+CLOUDFLARE_TUNNEL=NOT_CREATED
+PUBLIC_HOSTNAME=NOT_CREATED
+HTTPS=NOT_TESTED
+CHATGPT_WORK_REAL_TEST=NOT_RUN
+CUSTOMER_EMAIL_SENT=NO
+PRODUCTION_SERVICES_CHANGED=NO
+UNRELATED_DNS_CHANGED=NO
+MERGE=NO
+NEXT_ACTION=AWAIT_OFFICIAL_SUPPORT_STATUS; DO_NOT_RESUBMIT
+```
