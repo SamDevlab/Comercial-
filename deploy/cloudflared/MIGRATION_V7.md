@@ -226,3 +226,56 @@ NEXT_ACTION=READ_ONLY_RECHECK_AROUND_2026-11-06_23_13_BRT; REQUIRE_OLD_DS_ABSENT
 ```
 
 O DS novo do Cloudflare não foi ativado nem publicado. Mesmo após delegação estável, sua publicação no Registro.br continua dependendo de autorização específica. Tunnel, Access, rota pública e testes da Central permanecem pendentes até a zona estar ativa.
+
+## V11 Post Transition — delegação concluída; Access bloqueado pelo checkout Free
+
+Observações atuais em **2026-11-07**, horário de Brasília (UTC−3), entre **09:36 e 09:41**.
+
+### Delegação, DNSSEC e Lark
+
+Às **09:36:12**, consultas NS diretas a `a.dns.br` até `f.dns.br` retornaram, em todos os seis servidores, `ali.ns.cloudflare.com` e `apollo.ns.cloudflare.com`. `1.1.1.1` e `8.8.8.8` também retornaram o mesmo par. O TTL observado na delegação dos pais foi **3600 segundos** e o RRset NS retornado pelo Google tinha TTL **21600 segundos**; os resolvedores consultados não mostraram mais os NS antigos.
+
+Consultas DS com DNS-over-HTTPS do Google e Cloudflare, às **09:41**, responderam `Status=0`, sem resposta DS. A autoridade `com.br` devolveu SOA/NSEC3; não houve `SERVFAIL`. Depois de habilitar a assinatura na zona Cloudflare, o Google retornou NS e MX com RRSIG, `AD=false`, comportamento esperado enquanto o DS novo não estiver publicado no pai. Portanto, não há falha de DNSSEC, mas a cadeia ainda não é validada como segura até a publicação autorizada do DS.
+
+Na conta **Samusilvadev**, o painel mostrou a zona ativa, plano Free, `DNS Setup: Full`, os nameservers aprovados e `7/200` registros. As duas autoridades Cloudflare e os resolvedores públicos responderam com o inventário Lark:
+
+- MX: `mx1.larksuite.com` prioridade 1; `mx2.larksuite.com` prioridade 5; `mx3.larksuite.com` prioridade 10.
+- SPF: presente; verificação Lark: presente; DKIM `lark2610221127._domainkey`: presente; DMARC: `v=DMARC1; p=none;`.
+- Os valores integrais do TXT de verificação e da chave DKIM não foram copiados para o relatório. Nenhum dos sete registros foi alterado.
+
+O painel Cloudflare avisou que não há A/AAAA/CNAME para o apex nem para `www`. Consultas autoritativas atuais confirmaram NODATA para A/AAAA no apex e NXDOMAIN para `www`. Nenhum destino web foi fornecido; não foi inventado nem alterado registro de site. A disponibilidade do site nesses nomes não foi comprovada nesta rodada.
+
+DNSSEC foi habilitado no Cloudflare apenas para preparar a assinatura. A interface mostra estado **pending**, aguardando DS no Registro.br. DS preparado: **2371 13 2 9988E1950F146843EF3F982F6FA19EF0DA3F597903EF7E23BA36DF09603F4648**. O DS não foi publicado no Registro.br.
+
+### Central Comercial e bloqueio de Access
+
+O hostname `central-comercial.wstecnologiaaplicada.com.br` continua sem registro DNS; consultas às duas autoridades Cloudflare retornaram inexistência, sem conflito. Cloudflare Access ainda não tem aplicação configurada e o onboarding Zero Trust não foi concluído.
+
+O login `cloudflared` foi autorizado exclusivamente para a zona aprovada; o certificado de origem ficou no perfil Windows, com ACL para o usuário, Administradores locais e SYSTEM. `cloudflared tunnel list` confirmou **nenhum Tunnel existente**. Não foi criado Tunnel nem rota DNS, respeitando a ordem de proteger Access primeiro.
+
+O painel ofereceu Zero Trust Free a **US$ 0/mês** para até 50 usuários, mas apresentou uma caixa separada que autoriza cobranças mensais por uso acima da cota. O proprietário autorizou aceitar os Termos e ativar Free sem overage. Mesmo com o aceite dos Termos marcado e a autorização de overage desmarcada, o checkout recusou a ativação com “You need to agree to the terms above to continue.” O checkout foi fechado; a tela voltou a “Welcome to Cloudflare Zero Trust”. Nenhuma autorização de cobrança foi dada e o plano não foi ativado.
+
+No ambiente privado `%LOCALAPPDATA%\CentralComercial\central-comercial.env`, `CENTRAL_PUBLIC_ORIGIN` foi atualizado para `https://central-comercial.wstecnologiaaplicada.com.br`; hash de senha, segredo de sessão e credenciais Lark permaneceram idênticos, e a ACL do arquivo não mudou. A suíte local executou **22 testes, todos aprovados**, incluindo login/logout, cookies seguros, CSRF, Host/Origin, PDF e prévia; não houve envio SMTP real. O health check local respondeu `200 ok` com Host aprovado e `400` com Host incompatível. O runtime foi encerrado após a verificação; enquanto esteve ativo, escutou somente em `127.0.0.1`. HTTPS público, sessão autenticada em produção e ChatGPT Work não foram testados, pois Access e Tunnel permanecem bloqueados.
+
+```text
+OBSERVATION_TIME=2026-11-07 09:36–09:41 -03
+OLD_DS=ABSENT_IN_GOOGLE_AND_CLOUDFLARE_DOH; NO_PARENT_DS_ANSWER
+PARENT_NS=ALI_AND_APOLLO_ON_ALL_SIX_BR_AUTHORITIES
+CLOUDFLARE_ZONE=ACTIVE_FREE; 7_RECORDS
+DNSSEC_VALIDATION=NO_SERVFAIL; CHILD_SIGNED; AD_FALSE_PENDING_PARENT_DS
+LARK_DNS=PASS; ALL_SEVEN_PRESENT; NO_RECORDS_CHANGED
+NEW_DS=2371 13 2 9988E1950F146843EF3F982F6FA19EF0DA3F597903EF7E23BA36DF09603F4648
+NEW_DS_PUBLISHED=NO
+ACCESS=NOT_CONFIGURED; ZERO_TRUST_FREE_CHECKOUT_VALIDATION_BLOCKED
+TUNNEL=NONE_EXISTING; NOT_CREATED_BEFORE_ACCESS
+HOSTNAME_DNS=ABSENT; NO_CONFLICT
+CENTRAL_ORIGIN=HTTPS_CONFIGURED_IN_PRIVATE_ENV; SECRETS_AND_ACL_PRESERVED
+LOCAL_TESTS=22_PASS; HEALTHZ_PASS_WITH_APPROVED_HOST
+HTTPS=NOT_TESTED; PANEL_AUTH=UNIT_TESTS_PASS_LIVE_NOT_TESTED
+CHATGPT_WORK=NOT_TESTED
+RESUBMISSION=NO
+REAL_EMAIL_SENT=NO
+MERGE=NO
+NEXT_ACTION=REQUEST_CLOUDFLARE_RESOLUTION_FOR_FREE_ACTIVATION_WITHOUT_OVERAGE; THEN_CONFIGURE_ACCESS_BEFORE_TUNNEL_OR_DNS
+RESULT=PARTIAL
+```
