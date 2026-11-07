@@ -279,3 +279,68 @@ MERGE=NO
 NEXT_ACTION=REQUEST_CLOUDFLARE_RESOLUTION_FOR_FREE_ACTIVATION_WITHOUT_OVERAGE; THEN_CONFIGURE_ACCESS_BEFORE_TUNNEL_OR_DNS
 RESULT=PARTIAL
 ```
+
+
+## V12 Zero Trust Free — onboarding bloqueado; nenhuma cobrança autorizada
+
+Observações em **2026-11-07, 13:08–13:16 UTC (10:08–10:16 BRT)**.
+
+### Conta e checkout
+
+- O dashboard autenticado exibiu a conta escolhida **Samusilvadev**. A página Zero Trust mostrou “Welcome to Cloudflare Zero Trust” e “Get started”; não há organização Zero Trust criada.
+- O caminho oficial “Get started” abriu a seleção de planos. O cartão Zero Trust Free indicou **US$ 0 por assento/mês** e limite de 50 usuários. Ao selecionar Free, o dashboard navegou para /zero-trust/checkout/free, mas a página ficou branca, sem campos de pagamento, termos, opção de overage ou botão de envio visíveis. Não houve novo envio.
+- No checkout observado em V11, marcar os Termos e deixar a autorização de overage desmarcada resultou em **“You need to agree to the terms above to continue.”** O plano não foi ativado. Neste V12 nenhum termo foi aceito novamente, nenhum dado de pagamento foi digitado, overage segue não autorizado e nenhuma assinatura paga foi criada.
+- A [documentação atual do Cloudflare](https://developers.cloudflare.com/learning-paths/cybersafe/account-creation/create-zero-trust-org/) diz que criar uma organização Zero Trust requer selecionar o plano e informar payment details; também diz que o plano Free não gera cobrança. O método de pagamento existente visto em V11 não foi alterado; a página em branco não permite determinar se ele atende ao requisito ou se há falha de validação. A documentação aponta para o mesmo onboarding do dashboard e não apresenta caminho alternativo oficial de ativação Free.
+- A [página de status](https://www.cloudflarestatus.com/services) consultada mostrava Zero Trust e Zero Trust Dashboard operacionais; a busca oficial pela mensagem exata não encontrou um aviso de incidente. Isso não descarta problema específico da conta ou da interface.
+- Os [canais oficiais de suporte](https://developers.cloudflare.com/support/contacting-cloudflare-support/) informam que contas Free podem abrir casos para billing, account e registrar issues e recomendam Cloudflare Community para troubleshooting. Nenhum ticket, post ou mensagem foi enviado; o relato técnico está preparado para envio pelo proprietário, sem segredos ou dados de cartão.
+
+### DNS e DNSSEC — nova observação
+
+Às **13:12:49 UTC**, 1.1.1.1 respondeu com ali.ns.cloudflare.com e apollo.ns.cloudflare.com (TTL observado **86400 s**). As autoridades Cloudflare responderam aos registros Lark; 1.1.1.1 e 8.8.8.8 resolveram os três MX. Não foi observado SERVFAIL.
+
+Às **13:15:55 UTC**, Google DNS-over-HTTPS retornou consulta DS com Status=0, zero respostas e seis registros de autoridade; AD=false. A zona serviu duas DNSKEYs. O DS SHA-256 recalculado da DNSKEY atual corresponde ao DS preparado:
+
+**2371 13 2 9988E1950F146843EF3F982F6FA19EF0DA3F597903EF7E23BA36DF09603F4648**
+
+O pai ainda não publica DS. Assim, os registros assinados do filho não formam uma cadeia validada por DNSSEC nesta observação (AD=false); não se declara DNSSEC plenamente validado. O novo DS não foi publicado.
+
+Os sete registros Lark permanecem presentes: MX de prioridades 1/5/10; dois TXT no apex (SPF e outro TXT de verificação já identificado como Lark), um DKIM e um DMARC. O valor de verificação e a chave DKIM foram omitidos. Nenhum registro DNS foi alterado. Consultas atuais também não encontraram A/AAAA/CNAME para central-comercial.wstecnologiaaplicada.com.br.
+
+### Estado de implantação e CI
+
+Zero Trust ainda não está provisionado; Access não existe. Nenhum Tunnel foi criado, nenhuma rota DNS do hostname foi criada e HTTPS público não foi testado. Login da Central, PDF, prévia, cookies, CSRF, Origin/Host, logout e ChatGPT Work continuam sem teste público. Nenhum e-mail real foi enviado; nenhum outro serviço foi modificado; nenhum merge foi executado.
+
+Na revisão do HEAD 6659a3d9ba6774e3eaaa4c730bbbde3f6462ada2, os dois checks unit-tests concluíram com sucesso. Anotações foram somente avisos de depreciação do Node.js 20 nos actions e da futura migração de ubuntu-latest; sem falhas de teste. Os 22 testes locais descritos em V11 passaram; V12 não alterou código de aplicação.
+
+### Estado resumido
+
+CAMPAIGN=TEC_COMERCIAL_ZERO_TRUST_V12_RECOVERY
+OBSERVATION_TIME=2026-11-07T13:08–13:16Z
+CLOUDFLARE_ACCOUNT=Samusilvadev
+ZERO_TRUST_ORGANIZATION=NOT_CREATED
+FREE_PLAN=NOT_ACTIVATED; FREE_CARD_DISPLAYED_USD_0; 50_SEATS
+CHECKOUT_ERROR=V11_GENERIC_TERMS_VALIDATION; V12_FREE_CHECKOUT_BLANK
+CHECKOUT_ROOT_CAUSE=UNRESOLVED; PAYMENT_DETAILS_REQUIRED_BY_OFFICIAL_DOCS; NO_BYPASS
+PAYMENT_METHOD_REQUIRED=PAYMENT_DETAILS_REQUIRED_FOR_ONBOARDING; EXISTING_METHOD_SHOWN_V11; CURRENT_BLANK_PAGE_PREVENTS_CONFIRMING_SUFFICIENCY
+OVERAGE_AUTHORIZED=NO
+PAID_SUBSCRIPTION_CREATED=NO
+ACCESS_APPLICATION=NOT_CREATED
+ACCESS_ALLOWED_EMAIL=NOT_CONFIGURED
+TUNNEL=NOT_CREATED
+HOSTNAME_DNS=NO_A_AAAA_CNAME
+HTTPS=NOT_TESTED
+PANEL_LOGIN=NOT_TESTED_PUBLICLY
+PDF_PREVIEW=NOT_TESTED_PUBLICLY
+CHATGPT_WORK_REAL_TEST=NOT_RUN
+PARENT_NS=ALI_AND_APOLLO_VIA_1.1.1.1_TTL_86400
+PARENT_DS=NO_DS_ANSWER_STATUS0; AD_FALSE
+DNSSEC_VALIDATION=INCOMPLETE_PARENT_DS_ABSENT; CURRENT_DNSKEY_MATCHES_PREPARED_DS; NO_SERVFAIL
+LARK_DNS=PASS_3_MX_4_TXT; NO_CHANGES
+REAL_EMAIL_SENT=NO
+OTHER_SERVICES_CHANGED=NO
+MERGE=NO
+PR_HEAD_BEFORE_REPORT_UPDATE=6659a3d9ba6774e3eaaa4c730bbbde3f6462ada2
+CI_AT_THAT_HEAD=2_UNIT_TEST_CHECKS_SUCCESS; WARNINGS_ONLY
+SUPPORT_CONTACT=NOT_SENT; OFFICIAL_FREE_CHANNELS_REVIEWED; DRAFT_PREPARED
+FINAL_RESULT=PARTIAL
+NEXT_ACTION=OWNER_TO_ASK_CLOUDFLARE_ACCOUNT_SUPPORT_OR_COMMUNITY_HOW_TO_COMPLETE_FREE_ONBOARDING_WITHOUT_OVERAGE; STOP_IF_NEW_PAYMENT_DETAILS_OR_OVERAGE_AUTHORIZATION_REQUIRED
