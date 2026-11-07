@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Central Comercial · Tec Escola</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-inner">
+      <div class="top-logo">WS<span>.</span></div>
+      <span class="top-title">Central Comercial <span class="top-sep">/</span> Tec Escola</span>
+      <button type="button" class="signout" id="logout" data-testid="logout">Sair <span aria-hidden="true">↗</span></button>
+    </div>
+  </header>
+  <main class="shell">
+    <div class="heading">
+      <div>
+        <p class="eyebrow">PROPOSTAS PERSONALIZADAS</p>
+        <h1>Prepare e envie propostas</h1>
+        <p class="muted">Preencha uma vez, confira o e-mail como o cliente verá e autorize o envio pelo Lark.</p>
+      </div>
+      <div class="status {% if smtp_ready %}connected{% elif smtp_status in ('falha_autenticacao', 'conexao_indisponivel', 'erro_smtp') %}failed{% else %}offline{% endif %}" id="smtp-status" data-status="{{ smtp_status }}" aria-live="polite">
+        <span class="status-dot"></span>
+        <span id="smtp-status-label">{{ smtp_status_label }}</span>
+      </div>
+    </div>
+    <div class="workspace">
+      <section class="panel editor" aria-labelledby="editor-title">
+        <div class="panel-heading">
+          <div class="number">01</div>
+          <div><h2 id="editor-title">Dados do envio</h2><p>Um destinatário por vez, com revisão obrigatória.</p></div>
+        </div>
+        <form id="proposal-form">
+          <label for="template">Modelo de comunicação</label>
+          <select name="template" id="template" data-testid="template" required>
+            <option value="institucional" data-subject="Conheça a Tec Escola">Apresentação institucional</option>
+            <option value="proposta" data-subject="Sua proposta comercial Tec Escola está pronta">Proposta comercial</option>
+          </select>
+          <div class="rule"></div>
+          <label for="destinatario">E-mail do destinatário <em>*</em></label>
+          <input id="destinatario" data-testid="destinatario" type="email" name="destinatario" placeholder="direcao@colegio.com.br" maxlength="254" required>
+          <div class="two-fields">
+            <div><label for="responsavel">Nome do responsável <em>*</em></label>
+              <input id="responsavel" data-testid="responsavel" name="responsavel" placeholder="Maria Silva" maxlength="120" required></div>
+            <div><label for="instituicao">Instituição</label>
+              <input id="instituicao" data-testid="instituicao" name="instituicao" placeholder="Colégio Exemplo" maxlength="120"></div>
+          </div>
+          <label for="consultor">Consultor responsável</label>
+          <input id="consultor" data-testid="consultor" name="consultor" placeholder="Equipe Comercial" maxlength="120">
+          <label for="mensagem">Mensagem complementar <span class="optional">(opcional)</span></label>
+          <textarea id="mensagem" data-testid="mensagem" name="mensagem" maxlength="2000" rows="3" aria-describedby="message-help" placeholder="Inclua um contexto breve para este contato."></textarea>
+          <p class="field-help" id="message-help">O texto será inserido na prévia e na alternativa em texto simples.</p>
+          <label for="assunto">Assunto <em>*</em></label>
+          <input id="assunto" data-testid="assunto" name="assunto" value="Conheça a Tec Escola" maxlength="160" required>
+          <div class="rule"></div>
+          <label for="pdf">Anexo PDF obrigatório <em>*</em></label>
+          <div class="upload-box">
+            <input id="pdf" data-testid="pdf" name="pdf" type="file" accept=".pdf,application/pdf" data-max-bytes="{{ pdf_limit_bytes }}" data-max-label="{{ pdf_limit_mb }} MB" required>
+            <p>Até {{ pdf_limit_mb }} MB. O arquivo fica em memória até o envio ou a expiração da prévia.</p>
+          </div>
+          <button type="submit" id="preview-button" data-testid="preview-button" class="primary full">Gerar prévia para revisão <span aria-hidden="true">→</span></button>
+        </form>
+      </section>
+      <section class="panel review" aria-labelledby="review-title">
+        <div class="panel-heading">
+          <div class="number">02</div>
+          <div><h2 id="review-title">Prévia e confirmação</h2><p>Exibição do HTML original sem copiar e colar no Lark.</p></div>
+        </div>
+        <div class="smtp-diagnostic">
+          <div>
+            <button type="button" id="smtp-check-button" data-testid="smtp-check-button" class="secondary-button" {% if not smtp_configured %}disabled{% endif %}>
+              Testar autenticação sem enviar
+            </button>
+            <p class="field-help">Valida acesso ao SMTP do Lark sem criar ou enviar e-mail.</p>
+          </div>
+          {% if not smtp_configured %}
+          <p class="notice warning smtp-help">Configure LARK_SMTP_USER e LARK_SMTP_APP_PASSWORD no ambiente privado para testar e enviar.</p>
+          {% endif %}
+        </div>
+        <p id="smtp-check-message" class="notice" role="status" aria-live="polite" hidden></p>
+        <div class="preview-empty" id="preview-empty">
+          <div class="preview-symbol" aria-hidden="true">✉</div>
+          <h3>Sua proposta aparecerá aqui</h3>
+          <p>Preencha os dados, selecione o PDF e gere uma prévia.</p>
+        </div>
+        <div id="preview-ready" hidden>
+          <div class="review-meta">
+            <p><strong>Para:</strong> <span id="review-recipient"></span></p>
+            <p><strong>Assunto:</strong> <span id="review-subject"></span></p>
+            <p><strong>Anexo:</strong> <span id="review-pdf"></span></p>
+          </div>
+          <iframe id="email-frame" data-testid="email-frame" title="Prévia do corpo do e-mail" sandbox="" referrerpolicy="no-referrer"></iframe>
+          <p class="fineprint">A prévia expira em 10 minutos e não garante aparência idêntica em todos os clientes de e-mail.</p>
+          <button id="send-button" data-testid="send-button" class="primary full" type="button" data-smtp-ready="{{ 'true' if smtp_ready else 'false' }}" {% if not smtp_ready %}disabled{% endif %}>
+            Confirmar e enviar pelo Lark
+          </button>
+          {% if smtp_configured and not smtp_ready %}
+          <p id="smtp-send-help" class="notice warning">Valide a autenticação SMTP antes de enviar. O painel só habilita o envio após esse teste.</p>
+          {% endif %}
+        </div>
+        <p id="message" class="notice" role="status" aria-live="polite" hidden></p>
+      </section>
+    </div>
+    <section class="history-panel" aria-labelledby="history-title">
+      <div class="history-heading">
+        <div><p class="eyebrow">ATIVIDADE RECENTE</p><h2 id="history-title">Histórico desta sessão</h2></div>
+        <p class="muted">Registro temporário, sem destinatário ou conteúdo da mensagem.</p>
+      </div>
+      {% if history %}
+      <ul class="history-list">
+        {% for entry in history %}
+        <li>
+          <span class="history-template">{{ templates[entry.modelo][1] }}</span>
+          <time datetime="{{ entry.quando }}">{{ entry.quando[:19].replace('T', ' ') }} UTC</time>
+          <span class="history-status {% if entry.status == 'aceito_pelo_smtp' %}ok{% else %}failed{% endif %}">
+            {% if entry.status == 'aceito_pelo_smtp' %}Aceito pelo SMTP · entrega não confirmada{% elif entry.status == 'falha_autenticacao' %}Falha de autenticação{% elif entry.status == 'falha_conexao' %}Conexão indisponível{% else %}Mensagem rejeitada{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="history-empty">Nenhuma tentativa de envio registrada nesta sessão.</p>
+      {% endif %}
+    </section>
+    <footer>Central Comercial · Acesso privado · Nenhuma proposta é enviada sem confirmação</footer>
+  </main>
+</body>
+</html>

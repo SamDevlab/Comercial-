@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+.pytest_cache/
+deploy/cloudflared/config.yml
+deploy/cloudflared/*.json
+.cloudflared/
