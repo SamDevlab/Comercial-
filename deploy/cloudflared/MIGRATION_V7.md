@@ -169,3 +169,60 @@ UNRELATED_DNS_CHANGED=NO
 MERGE=NO
 NEXT_ACTION=AWAIT_OFFICIAL_SUPPORT_STATUS; DO_NOT_RESUBMIT
 ```
+
+## V10 Final Recovery — solicitação única aceita, transição em curso
+
+Data das observações: **2026-11-06**, horário de Brasília (UTC−3).
+
+### Confirmação do suporte e pré-verificação
+
+Foi lida a resposta recebida de `hostmaster@registro.br`, na thread com assunto `Re: [BR-2026110619.43] Consulta de status de solicitação DNS — wstecnologiaaplicada.com.br`, às **11:25:51**. O suporte informou que não identificou a tentativa anterior e que o encerramento da sessão provavelmente impediu seu registro; orientou autenticar novamente e refazer a solicitação pelo painel.
+
+Antes da nova submissão, às **21:09:58**, consultas aos seis pais `.br` ainda mostravam DS `46835/13/2` (TTL `3600`) e os NS antigos. `1.1.1.1`, `8.8.8.8` e Google DoH confirmaram a delegação antiga, os três MX Lark e respostas validadas (`Status=0`, `AD=true`) para MX, TXT, DMARC e DKIM.
+
+Na conta **Samusilvadev**, o painel Cloudflare mostrou a zona no plano Free, estado `pending` e `7/200` registros. As consultas diretas às quatro autoridades (`b.sec.dns.br`, `c.sec.dns.br`, `ali.ns.cloudflare.com`, `apollo.ns.cloudflare.com`) encontraram sete registros em cada uma: três MX, dois TXT no apex, um DMARC e um DKIM. As duas autoridades antigas coincidiram entre si, as duas Cloudflare coincidiram entre si e as listas de conteúdo corresponderam exatamente. SPF e verificação do Lark estavam presentes. Conteúdos dos TXT de verificação e DKIM não foram copiados para o relatório.
+
+Às **21:12**, a sessão autenticada do Registro.br exibiu o domínio `wstecnologiaaplicada.com.br`, publicado e ainda sob DNS do Registro.br. O formulário continha somente `ali.ns.cloudflare.com` e `apollo.ns.cloudflare.com`; a pré-verificação passou.
+
+### Submissão e estado DNS imediato
+
+O botão final de confirmação foi acionado **uma única vez**, às **2026-11-06 21:13:30 -03:00**. Não foi exibido número de protocolo. O painel removeu o formulário e passou a mostrar os dois NS aprovados e o aviso de que o domínio está “em transição”, com servidores externos elegíveis à delegação em aproximadamente **1h59m45s**. Isso confirma o aceite do fluxo pelo painel, mas não a conclusão da delegação.
+
+Consulta aos seis pais às **21:14:54** ainda retornou o DS antigo `46835/13/2`, TTL `3600`, e `b.sec.dns.br` / `c.sec.dns.br`. `1.1.1.1` e `8.8.8.8` também continuavam na delegação antiga. Google DoH manteve `Status=0`, `AD=true`, os três MX e os quatro TXT do Lark. Essa é a observação imediatamente posterior à submissão, durante a janela de transição; não indica falha nem autoriza novo envio.
+
+### Estado e próximas validações
+
+```text
+SUPPORT_CONFIRMATION=RECEIVED_FROM_HOSTMASTER_2026-11-06_11_25_51_BRT; PREVIOUS_REQUEST_NOT_FOUND; SESSION_EXPIRY_PROBABLE
+PREVIOUS_REQUEST=NOT_FOUND_BY_OFFICIAL_SUPPORT
+NEW_REQUEST_AUTHORIZATION=ONE_ATTEMPT; USED_ONCE
+PREFLIGHT=PASS_EXACT_7_RECORDS_ON_2_OLD_AND_2_CLOUDFLARE_AUTHORITIES; CLOUDFLARE_ACCOUNT_SAMUSILVADEV_FREE
+REQUEST_SUBMISSION=SUBMITTED_ONCE; PANEL_ACKNOWLEDGED_DNS_TRANSITION
+REQUEST_RECEIPT=NO_PROTOCOL_NUMBER; PANEL_SHOWED_APPROVED_NS_AND_TRANSITION_TIMER
+REQUEST_SUBMISSION_TIME=2026-11-06T21:13:30-03:00
+OLD_DS=PRESENT_46835_ALG13_DIGEST2_TTL3600_ON_ALL_SIX_PARENTS_AT_21_14_54
+NEW_DS=NOT_CONFIGURED
+PARENT_NAMESERVERS=OLD_B_SEC_AND_C_SEC_ON_ALL_SIX_PARENTS_AT_21_14_54
+CLOUDFLARE_ZONE=PENDING_FREE_7_RECORDS; DIRECT_AUTHORITIES_MATCH
+DELEGATION_STATUS=DELEGATION_IN_PROGRESS; PANEL_ESTIMATE_APPROX_1H59M45S
+LARK_MX=PASS_3_TARGETS_AND_PRIORITIES_1_5_10
+LARK_SPF=PASS
+LARK_DKIM=PASS
+LARK_DMARC=PASS
+LARK_VERIFICATION=PASS
+DNSSEC_VALIDATION=PASS_GOOGLE_DOH_STATUS0_AD_TRUE; OLD_CHAIN_STILL_VALID; OLD_DS_NOT_REMOVED
+TUNNEL=NOT_CREATED
+ACCESS_APPLICATION=NOT_CREATED
+ACCESS_ALLOWED_EMAIL=comercial@wstecnologiaaplicada.com.br
+PUBLIC_HOSTNAME=NOT_CREATED
+HTTPS=NOT_TESTED
+CENTRAL_COMERCIAL_HEALTH=NOT_TESTED
+CHATGPT_WORK_REAL_TEST=NOT_RUN
+REAL_EMAIL_SENT=NO
+UNRELATED_DNS_CHANGED=NO
+EXISTING_VPS_CHANGED=NO
+MERGE=NO
+NEXT_ACTION=READ_ONLY_RECHECK_AROUND_2026-11-06_23_13_BRT; REQUIRE_OLD_DS_ABSENT_NEW_NS_AT_ALL_SIX_PARENTS_LARK_PASS_AND_CLOUDFLARE_ACTIVE_BEFORE_NEXT_STAGE
+```
+
+O DS novo do Cloudflare não foi ativado nem publicado. Mesmo após delegação estável, sua publicação no Registro.br continua dependendo de autorização específica. Tunnel, Access, rota pública e testes da Central permanecem pendentes até a zona estar ativa.
